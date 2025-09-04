@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: autoops-elastic-agent
+  labels:
+    app: autoops-elastic-agent
+    app.kubernetes.io/component: autoops
+    app.kubernetes.io/name: autoops-elastic-agent
+    app.kubernetes.io/version: 9.1.0
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: autoops-elastic-agent
+      app.kubernetes.io/instance: autoops-elastic-agent
+      app.kubernetes.io/name: autoops-elastic-agent
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: autoops-elastic-agent
+        app.kubernetes.io/component: autoops
+        app.kubernetes.io/instance: autoops-elastic-agent
+        app.kubernetes.io/name: autoops-elastic-agent
+    spec:
+      containers:
+        - args:
+            - '--config'
+            - otel_samples/autoops_es.yml
+          env:
+            - name: AUTOOPS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: autoops-secret
+                  key: autoops-token
+            - name: AUTOOPS_ES_URL
+              valueFrom:
+                secretKeyRef:
+                  name: autoops-secret
+                  key: autoops-es-url
+            - name: AUTOOPS_TEMP_RESOURCE_ID
+              valueFrom:
+                secretKeyRef:
+                  name: autoops-secret
+                  key: temp-resource-id
+            - name: AUTOOPS_OTEL_URL
+              valueFrom:
+                secretKeyRef:
+                  name: autoops-secret
+                  key: autoops-otel-url
+            - name: ELASTICSEARCH_READ_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: autoops-secret
+                  key: es-username
+                  optional: true
+            - name: ELASTICSEARCH_READ_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: autoops-secret
+                  key: es-password
+                  optional: true
+            - name: ELASTICSEARCH_READ_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: autoops-secret
+                  key: es-api-key
+                  optional: true
+            - name: ELASTIC_CLOUD_CONNECTED_MODE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: autoops-secret
+                  key: cloud-connected-mode-api-key
+                  optional: true
+            - name: ELASTIC_CLOUD_CONNECTED_MODE_API_URL
+              valueFrom:
+                secretKeyRef:
+                  name: autoops-secret
+                  key: cloud-connected-mode-api-url
+                  optional: true
+          image: >-
+            docker.elastic.co/elastic-agent/elastic-otel-collector-wolfi:9.1.0
+          imagePullPolicy: Always
+          name: autoops-elastic-agent
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
