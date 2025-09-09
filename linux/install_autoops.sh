@@ -165,7 +165,7 @@ cp ./otel_samples/autoops_es.yml elastic-agent.yml
 # Install agent
 # ---------------------------
 echo "Installing Elastic Agent…"
-sudo ./elastic-agent install
+sudo ./elastic-agent install --non-interactive
 
 # ---------------------------
 # Systemd env injection
