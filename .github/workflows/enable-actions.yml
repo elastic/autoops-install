@@ -1,0 +1,7 @@
+name: Enable GitHub Actions
+on: [push, pull_request]
+jobs:
+  enable:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Hello World!"
