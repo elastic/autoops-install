@@ -15,7 +15,7 @@
 # Configurable defaults
 # ---------------------------
 DOWNLOAD_URL="https://artifacts.elastic.co/downloads/beats/elastic-agent"
-VERSION="9.1.0"
+VERSION="9.1.4"
 DO_NOT_DELETE=false
 CACHE_DIR="${AUTOOPS_CACHE_DIR:-$HOME/.cache/elastic-agent-installer}"
 ELASTIC_CLOUD_CONNECTED_MODE_API_URL=""
@@ -28,9 +28,9 @@ AUTOOPS_TOKEN=""
 ELASTIC_CLOUD_CONNECTED_MODE_API_KEY=""
 
 # Optional creds (user/pass OR api key)
-ELASTICSEARCH_READ_USERNAME=""
-ELASTICSEARCH_READ_PASSWORD=""
-ELASTICSEARCH_READ_API_KEY=""
+AUTOOPS_ES_USERNAME=""
+AUTOOPS_ES_PASSWORD=""
+AUTOOPS_ES_API_KEY=""
 
 # ---------------------------
 # Parse args
@@ -43,9 +43,9 @@ while [[ "$#" -gt 0 ]]; do
     --ccm-api-key) ELASTIC_CLOUD_CONNECTED_MODE_API_KEY="$2"; shift 2;;
     --ccm-api-url) ELASTIC_CLOUD_CONNECTED_MODE_API_URL="$2"; shift 2;;
     --temp-resource-id) AUTOOPS_TEMP_RESOURCE_ID="$2"; shift 2;;
-    --es-username) ELASTICSEARCH_READ_USERNAME="$2"; shift 2;;
-    --es-password) ELASTICSEARCH_READ_PASSWORD="$2"; shift 2;;
-    --es-api-key) ELASTICSEARCH_READ_API_KEY="$2"; shift 2;;
+    --es-username) AUTOOPS_ES_USERNAME="$2"; shift 2;;
+    --es-password) AUTOOPS_ES_PASSWORD="$2"; shift 2;;
+    --es-api-key) AUTOOPS_ES_API_KEY="$2"; shift 2;;
     --version) VERSION="$2"; shift 2;;
     --download-url) DOWNLOAD_URL="$2"; shift 2;;
     --cache-dir) CACHE_DIR="$2"; shift 2;;
@@ -69,9 +69,9 @@ elif [[ -z "$AUTOOPS_OTEL_URL" ]]; then
   echo "Error: --otel-endpoint required"; exit 1
 elif [[ -z "$ELASTIC_CLOUD_CONNECTED_MODE_API_KEY" ]]; then
   echo "Error: --ccm-api-key required"; exit 1
-elif [[ -n "$ELASTICSEARCH_READ_API_KEY" && ( -n "$ELASTICSEARCH_READ_USERNAME" || -n "$ELASTICSEARCH_READ_PASSWORD" ) ]]; then
+elif [[ -n "$AUTOOPS_ES_API_KEY" && ( -n "$AUTOOPS_ES_USERNAME" || -n "$AUTOOPS_ES_PASSWORD" ) ]]; then
   echo "Error: --es-api-key cannot be combined with --es-username/--es-password"; exit 1
-elif [[ ( -n "$ELASTICSEARCH_READ_USERNAME" && -z "$ELASTICSEARCH_READ_PASSWORD" ) || ( -z "$ELASTICSEARCH_READ_USERNAME" && -n "$ELASTICSEARCH_READ_PASSWORD" ) ]]; then
+elif [[ ( -n "$AUTOOPS_ES_USERNAME" && -z "$AUTOOPS_ES_PASSWORD" ) || ( -z "$AUTOOPS_ES_USERNAME" && -n "$AUTOOPS_ES_PASSWORD" ) ]]; then
   echo "Error: --es-username and --es-password must be provided together"; exit 1
 fi
 
@@ -181,9 +181,9 @@ Environment="AUTOOPS_TOKEN=${AUTOOPS_TOKEN}"
 Environment="AUTOOPS_TEMP_RESOURCE_ID=${AUTOOPS_TEMP_RESOURCE_ID}"
 Environment="ELASTIC_CLOUD_CONNECTED_MODE_API_KEY=${ELASTIC_CLOUD_CONNECTED_MODE_API_KEY}"
 Environment="ELASTIC_CLOUD_CONNECTED_MODE_API_URL=${ELASTIC_CLOUD_CONNECTED_MODE_API_URL}"
-Environment="ELASTICSEARCH_READ_USERNAME=${ELASTICSEARCH_READ_USERNAME}"
-Environment="ELASTICSEARCH_READ_PASSWORD=${ELASTICSEARCH_READ_PASSWORD}"
-Environment="ELASTICSEARCH_READ_API_KEY=${ELASTICSEARCH_READ_API_KEY}"
+Environment="AUTOOPS_ES_USERNAME=${AUTOOPS_ES_USERNAME}"
+Environment="AUTOOPS_ES_PASSWORD=${AUTOOPS_ES_PASSWORD}"
+Environment="AUTOOPS_ES_API_KEY=${AUTOOPS_ES_API_KEY}"
 EOF
 
 sudo systemctl daemon-reexec

@@ -6,7 +6,7 @@ metadata:
     app: autoops-elastic-agent
     app.kubernetes.io/component: autoops
     app.kubernetes.io/name: autoops-elastic-agent
-    app.kubernetes.io/version: 9.1.0
+    app.kubernetes.io/version: 9.1.4
 spec:
   progressDeadlineSeconds: 600
   replicas: 1
@@ -54,19 +54,19 @@ spec:
                 secretKeyRef:
                   name: autoops-secret
                   key: autoops-otel-url
-            - name: ELASTICSEARCH_READ_USERNAME
+            - name: AUTOOPS_ES_USERNAME
               valueFrom:
                 secretKeyRef:
                   name: autoops-secret
                   key: es-username
                   optional: true
-            - name: ELASTICSEARCH_READ_PASSWORD
+            - name: AUTOOPS_ES_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: autoops-secret
                   key: es-password
                   optional: true
-            - name: ELASTICSEARCH_READ_API_KEY
+            - name: AUTOOPS_ES_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: autoops-secret
@@ -85,7 +85,7 @@ spec:
                   key: cloud-connected-mode-api-url
                   optional: true
           image: >-
-            docker.elastic.co/elastic-agent/elastic-otel-collector-wolfi:9.1.0
+            docker.elastic.co/elastic-agent/elastic-otel-collector-wolfi:9.1.4
           imagePullPolicy: Always
           name: autoops-elastic-agent
           resources: {}
