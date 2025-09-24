@@ -33,6 +33,10 @@ spec:
         - args:
             - '--config'
             - otel_samples/autoops_es.yml
+            - '--set'
+            - 'exporters::otlphttp::sending_queue::batch::max_size=4194304' # 4 MiB (Remove after 9.1.5+)
+            - '--set'
+            - 'exporters::otlphttp::sending_queue::batch::sizer=bytes'
           env:
             - name: AUTOOPS_TOKEN
               valueFrom:
