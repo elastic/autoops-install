@@ -66,7 +66,7 @@ Use the `install_autoops.sh` script in order to install a new agent on your Linu
 | `es-username` | Yes | The Elasticsearch username used to fetch data from Elasticsearch. Requires password. |
 | `es-password` | Yes | The Elasticsearch password used to fetch data from Elasticsearch. Requires username. |
 | `es-api-key` | Yes | The Elasticsearch API Key used to fetch data from Elasticsearch. Cannot be suppled with username or password. |
-| `version` | Yes | Allows the version of the Elastic Agent to be overridden. |
+| `version` | Yes | Allows the version of the Elastic Agent to be overridden. Has to be 9.0.4 or later. **Note**: does **not** need to match the Elastic Stack version.  |
 
 ### Installation with Elasticsearch Basic Auth (Username / Password)
 
