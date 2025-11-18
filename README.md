@@ -80,7 +80,7 @@ Use the `install_autoops.sh` script in order to install a new agent on your Linu
   --es-endpoint "<your-es-url>" \
   --es-username "<your-es-user>" \
   --es-password "<your-es-pass>" \
---es-password "<your-es-pass>"
+  --es-password "<your-es-pass>"
 ```
 
 ### Installation with Elasticsearch API Key
@@ -94,5 +94,5 @@ Use the `install_autoops.sh` script in order to install a new agent on your Linu
   --temp-resource-id "<Provided by AutoOps installation wizard>" \
   --es-endpoint "<your-es-url>" \
   --es-api-key "<your-es-api-key>" \
---es-api-key "<your-es-api-key>"
+  --es-api-key "<your-es-api-key>"
 ```
