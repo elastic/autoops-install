@@ -8,7 +8,7 @@
 
 # Usage example:
 # ./install_autoops.sh \
-#   --version 9.1.2 \
+#   --version 9.1.5 \
 #   --token abc123 \
 #   --ccm-api-key xyz789 \
 #   --otel-endpoint https://otel-url.co:4318 \
@@ -21,7 +21,7 @@
 # Configurable defaults
 # ---------------------------
 DOWNLOAD_URL="https://artifacts.elastic.co/downloads/beats/elastic-agent"
-VERSION="9.1.5"
+VERSION="9.2.4"
 DO_NOT_DELETE=false
 CACHE_DIR="${AUTOOPS_CACHE_DIR:-$HOME/.cache/elastic-agent-installer}"
 ELASTIC_CLOUD_CONNECTED_MODE_API_URL=""
