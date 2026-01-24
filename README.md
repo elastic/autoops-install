@@ -94,3 +94,45 @@ Use the `install_autoops.sh` script in order to install a new agent on your Linu
   --es-endpoint "<your-es-url>" \
   --es-api-key "<your-es-api-key>"
 ```
+
+# Diagnostic Tools
+
+## Connectivity Check
+
+The `tools/check_connectivity.sh` script verifies network connectivity and configuration before or after installation. It checks:
+
+1. **Proxy Configuration** - Detects if HTTP_PROXY, HTTPS_PROXY, NO_PROXY, or other proxy variables are set
+2. **Cloud API Connectivity** - Tests connectivity to the Elastic Cloud Connected Mode API
+3. **OTEL Endpoint** - Tests connectivity to the OpenTelemetry endpoint
+4. **Elasticsearch** - Tests connectivity to your Elasticsearch cluster with authentication
+
+### Usage
+
+```sh
+./tools/check_connectivity.sh
+```
+
+### Environment Variables
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `ELASTIC_CLOUD_CONNECTED_MODE_API_URL` | No | `https://api.elastic-cloud.com` | Cloud API URL |
+| `AUTOOPS_OTEL_URL` | No | `https://otel-auto-ops.ap-northeast-1.aws.svc.elastic.cloud` | OTEL endpoint URL |
+| `AUTOOPS_ES_URL` | No | (skipped if unset) | Elasticsearch URL |
+| `AUTOOPS_ES_USERNAME` | No | - | Elasticsearch username (for Basic auth) |
+| `AUTOOPS_ES_PASSWORD` | No | - | Elasticsearch password (for Basic auth) |
+| `AUTOOPS_ES_API_KEY` | No | - | Elasticsearch API key (for ApiKey auth) |
+| `AUTOOPS_ES_CA` | No | - | Path to CA certificate file |
+
+### Example with Elasticsearch
+
+```sh
+AUTOOPS_ES_URL="https://localhost:9200" \
+AUTOOPS_ES_API_KEY="your-api-key" \
+./tools/check_connectivity.sh
+```
+
+### Exit Codes
+
+- `0` - All checks passed
+- `1` - One or more checks failed
