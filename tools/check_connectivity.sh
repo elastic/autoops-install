@@ -11,7 +11,7 @@
 #
 # Environment variables:
 #   ELASTIC_CLOUD_CONNECTED_MODE_API_URL - Cloud API URL (default: https://api.elastic-cloud.com)
-#   AUTOOPS_OTEL_URL                     - OTEL endpoint URL (default: https://otel-auto-ops.ap-northeast-1.aws.svc.elastic.cloud)
+#   AUTOOPS_OTEL_URL                     - OTel endpoint URL (default: https://otel-auto-ops.ap-northeast-1.aws.svc.elastic.cloud)
 #   AUTOOPS_ES_URL                       - Elasticsearch URL (optional)
 #   AUTOOPS_ES_USERNAME                  - Elasticsearch username (for Basic auth)
 #   AUTOOPS_ES_PASSWORD                  - Elasticsearch password (for Basic auth)
@@ -181,11 +181,11 @@ check_cloud_api() {
 }
 
 # ---------------------------
-# Check 2b: OTEL Endpoint
+# Check 2b: OTel Endpoint
 # ---------------------------
 
 check_otel() {
-  print_section "OTEL Endpoint"
+  print_section "OTel Endpoint"
 
   local otel_url="${AUTOOPS_OTEL_URL:-https://otel-auto-ops.ap-northeast-1.aws.svc.elastic.cloud}"
   local check_url="${otel_url}/v1/logs"

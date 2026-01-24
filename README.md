@@ -103,7 +103,7 @@ The `tools/check_connectivity.sh` script verifies network connectivity and confi
 
 1. **Proxy Configuration** - Detects if HTTP_PROXY, HTTPS_PROXY, NO_PROXY, or other proxy variables are set
 2. **Cloud API Connectivity** - Tests connectivity to the Elastic Cloud Connected Mode API
-3. **OTEL Endpoint** - Tests connectivity to the OpenTelemetry endpoint
+3. **OTel Endpoint** - Tests connectivity to the OpenTelemetry endpoint
 4. **Elasticsearch** - Tests connectivity to your Elasticsearch cluster with authentication
 
 ### Usage
@@ -117,7 +117,7 @@ The `tools/check_connectivity.sh` script verifies network connectivity and confi
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `ELASTIC_CLOUD_CONNECTED_MODE_API_URL` | No | `https://api.elastic-cloud.com` | Cloud API URL |
-| `AUTOOPS_OTEL_URL` | No | `https://otel-auto-ops.ap-northeast-1.aws.svc.elastic.cloud` | OTEL endpoint URL |
+| `AUTOOPS_OTEL_URL` | No | `https://otel-auto-ops.ap-northeast-1.aws.svc.elastic.cloud` | OTel endpoint URL |
 | `AUTOOPS_ES_URL` | No | (skipped if unset) | Elasticsearch URL |
 | `AUTOOPS_ES_USERNAME` | No | - | Elasticsearch username (for Basic auth) |
 | `AUTOOPS_ES_PASSWORD` | No | - | Elasticsearch password (for Basic auth) |

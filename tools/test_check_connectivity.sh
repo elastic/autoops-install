@@ -264,7 +264,7 @@ test_cloud_api_connection_refused() {
 }
 
 test_otel_success() {
-  log_test "OTEL endpoint - successful connection"
+  log_test "OTel endpoint - successful connection"
 
   start_mock_server "200" '{"status": "ok"}'
 
@@ -279,12 +279,12 @@ test_otel_success() {
 
   stop_mock_server
 
-  assert_output_contains "OTEL Endpoint" "$output"
+  assert_output_contains "OTel Endpoint" "$output"
   assert_output_contains "Connected (HTTP 200)" "$output"
 }
 
 test_otel_default_url() {
-  log_test "OTEL endpoint - uses default URL when not set"
+  log_test "OTel endpoint - uses default URL when not set"
 
   local output
   local exit_code=0
