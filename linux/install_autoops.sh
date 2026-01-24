@@ -5,7 +5,7 @@
 # 2.0; you may not use this file except in compliance with the Elastic License
 # 2.0.
 #
-
+#
 # Usage example:
 # ./install_autoops.sh \
 #   --version 9.1.5 \
