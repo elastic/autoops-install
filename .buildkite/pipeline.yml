@@ -1,0 +1,7 @@
+steps:
+  - label: ":bash: Test check_connectivity.sh"
+    command: "./tools/test_check_connectivity.sh"
+    agents:
+      provider: "gcp"
+      image: "core-ubuntu-2204"
+      machineType: "n2-standard-2" # small!
