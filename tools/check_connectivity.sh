@@ -8,6 +8,7 @@
 
 # Usage example:
 # ./check_connectivity.sh
+# ./check_connectivity.sh --debug
 #
 # Environment variables:
 #   ELASTIC_CLOUD_CONNECTED_MODE_API_URL - Cloud API URL (default: https://api.elastic-cloud.com)
@@ -26,6 +27,26 @@ if ! command -v curl &> /dev/null; then
   echo "Error: 'curl' is required but not installed"
   exit 1
 fi
+
+# ---------------------------
+# Argument parsing
+# ---------------------------
+
+DEBUG=false
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --debug)
+      DEBUG=true
+      shift
+      ;;
+    *)
+      echo "Unknown option: $1"
+      echo "Usage: $0 [--debug]"
+      exit 1
+      ;;
+  esac
+done
 
 # ---------------------------
 # Output formatting functions
@@ -189,7 +210,11 @@ check_cloud_api() {
   fi
 
   # Any HTTP response means connectivity works (even 4xx/5xx)
-  print_success "Connected (HTTP $http_code)"
+  if [[ "$DEBUG" == "true" ]]; then
+    print_success "Connected (HTTP $http_code)"
+  else
+    print_success "Connected"
+  fi
   ((CHECKS_PASSED++))
   return 0
 }
@@ -233,7 +258,11 @@ check_otel() {
     return 1
   fi
 
-  print_success "Connected (HTTP $http_code)"
+  if [[ "$DEBUG" == "true" ]]; then
+    print_success "Connected (HTTP $http_code)"
+  else
+    print_success "Connected"
+  fi
   ((CHECKS_PASSED++))
   return 0
 }

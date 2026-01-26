@@ -244,7 +244,8 @@ test_cloud_api_success() {
 
   stop_mock_server
 
-  assert_output_contains "Connected (HTTP 200)" "$output"
+  assert_output_contains "Connected" "$output"
+  assert_output_not_contains "HTTP 200" "$output"
 }
 
 test_cloud_api_connection_refused() {
@@ -280,7 +281,8 @@ test_otel_success() {
   stop_mock_server
 
   assert_output_contains "OTel Endpoint" "$output"
-  assert_output_contains "Connected (HTTP 200)" "$output"
+  assert_output_contains "Connected" "$output"
+  assert_output_not_contains "HTTP 200" "$output"
 }
 
 test_otel_default_url() {
@@ -557,6 +559,57 @@ test_curl_not_installed() {
   assert_output_contains "required" "$output"
 }
 
+test_debug_flag_shows_http_code() {
+  log_test "Debug flag - shows HTTP code with --debug"
+
+  start_mock_server "200" '{"status": "ok"}'
+
+  local output
+  local exit_code=0
+
+  output=$(
+    ELASTIC_CLOUD_CONNECTED_MODE_API_URL="${MOCK_SERVER_URL}" \
+    AUTOOPS_OTEL_URL="http://127.0.0.1:1" \
+    bash "$CHECK_SCRIPT" --debug 2>&1
+  ) || exit_code=$?
+
+  stop_mock_server
+
+  assert_output_contains "Connected (HTTP 200)" "$output"
+}
+
+test_debug_flag_otel_shows_http_code() {
+  log_test "Debug flag - OTel shows HTTP code with --debug"
+
+  start_mock_server "200" '{"status": "ok"}'
+
+  local output
+  local exit_code=0
+
+  output=$(
+    ELASTIC_CLOUD_CONNECTED_MODE_API_URL="http://127.0.0.1:1" \
+    AUTOOPS_OTEL_URL="${MOCK_SERVER_URL}" \
+    bash "$CHECK_SCRIPT" --debug 2>&1
+  ) || exit_code=$?
+
+  stop_mock_server
+
+  assert_output_contains "Connected (HTTP 200)" "$output"
+}
+
+test_unknown_argument() {
+  log_test "Unknown argument - exits with error"
+
+  local output
+  local exit_code=0
+
+  output=$(bash "$CHECK_SCRIPT" --invalid 2>&1) || exit_code=$?
+
+  assert_exit_code 1 "$exit_code"
+  assert_output_contains "Unknown option" "$output"
+  assert_output_contains "Usage:" "$output"
+}
+
 # ---------------------------
 # Run all tests
 # ---------------------------
@@ -606,6 +659,9 @@ run_all_tests() {
   test_summary_all_pass
   test_summary_some_fail
   test_curl_not_installed
+  test_debug_flag_shows_http_code
+  test_debug_flag_otel_shows_http_code
+  test_unknown_argument
 
   # Print summary
   echo ""
