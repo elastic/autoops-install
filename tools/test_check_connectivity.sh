@@ -545,14 +545,19 @@ test_summary_some_fail() {
 test_curl_not_installed() {
   log_test "Dependency check - curl not installed"
 
+  # Create a temporary directory with only bash (no curl)
+  local temp_bin
+  temp_bin=$(mktemp -d)
+  ln -s "$(command -v bash)" "${temp_bin}/bash"
+
   local output
   local exit_code=0
 
-  # Run with PATH that includes bash but not curl
-  # bash is typically in /bin, curl in /usr/bin
   output=$(
-    PATH="/bin" bash "$CHECK_SCRIPT" 2>&1
+    PATH="${temp_bin}" "${temp_bin}/bash" "$CHECK_SCRIPT" 2>&1
   ) || exit_code=$?
+
+  rm -rf "${temp_bin}"
 
   assert_exit_code 1 "$exit_code"
   assert_output_contains "curl" "$output"
