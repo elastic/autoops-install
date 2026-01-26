@@ -503,6 +503,23 @@ test_summary_some_fail() {
   assert_output_contains "Result: Some checks failed" "$output"
 }
 
+test_curl_not_installed() {
+  log_test "Dependency check - curl not installed"
+
+  local output
+  local exit_code=0
+
+  # Run with PATH that includes bash but not curl
+  # bash is typically in /bin, curl in /usr/bin
+  output=$(
+    PATH="/bin" bash "$CHECK_SCRIPT" 2>&1
+  ) || exit_code=$?
+
+  assert_exit_code 1 "$exit_code"
+  assert_output_contains "curl" "$output"
+  assert_output_contains "required" "$output"
+}
+
 # ---------------------------
 # Run all tests
 # ---------------------------
@@ -549,6 +566,7 @@ run_all_tests() {
   test_value_masking_short
   test_summary_all_pass
   test_summary_some_fail
+  test_curl_not_installed
 
   # Print summary
   echo ""

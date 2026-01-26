@@ -19,6 +19,15 @@
 #   AUTOOPS_ES_CA                        - Path to CA certificate file (optional)
 
 # ---------------------------
+# Dependency check
+# ---------------------------
+
+if ! command -v curl &> /dev/null; then
+  echo "Error: 'curl' is required but not installed"
+  exit 1
+fi
+
+# ---------------------------
 # Output formatting functions
 # ---------------------------
 
