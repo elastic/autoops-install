@@ -156,10 +156,15 @@ check_proxy() {
 check_cloud_api() {
   print_section "Elastic Cloud Connected Mode API"
 
-  local base_url="${ELASTIC_CLOUD_CONNECTED_MODE_API_URL:-https://api.elastic-cloud.com}"
+  local base_url="${ELASTIC_CLOUD_CONNECTED_MODE_API_URL:-}"
+  local using_default=""
+  if [[ -z "$base_url" ]]; then
+    base_url="https://api.elastic-cloud.com"
+    using_default=" (default)"
+  fi
   local check_url="${base_url}/api/v1/cloud-connected/clusters"
 
-  print_info "URL: $base_url"
+  print_info "URL: ${base_url}${using_default}"
   print_check "connectivity to ${check_url}"
 
   local http_code
@@ -196,10 +201,15 @@ check_cloud_api() {
 check_otel() {
   print_section "OTel Endpoint"
 
-  local otel_url="${AUTOOPS_OTEL_URL:-https://otel-auto-ops.ap-northeast-1.aws.svc.elastic.cloud}"
+  local otel_url="${AUTOOPS_OTEL_URL:-}"
+  local using_default=""
+  if [[ -z "$otel_url" ]]; then
+    otel_url="https://otel-auto-ops.ap-northeast-1.aws.svc.elastic.cloud"
+    using_default=" (default)"
+  fi
   local check_url="${otel_url}/v1/logs"
 
-  print_info "URL: ${otel_url}"
+  print_info "URL: ${otel_url}${using_default}"
   print_check "connectivity to ${check_url}"
 
   local http_code

@@ -296,6 +296,42 @@ test_otel_default_url() {
   ) || exit_code=$?
 
   assert_output_contains "otel-auto-ops.ap-northeast-1.aws.svc.elastic.cloud" "$output"
+  assert_output_contains "(default)" "$output"
+}
+
+test_cloud_api_default_url() {
+  log_test "Cloud API - shows default indicator when using default URL"
+
+  local output
+  local exit_code=0
+
+  output=$(
+    unset ELASTIC_CLOUD_CONNECTED_MODE_API_URL
+    AUTOOPS_OTEL_URL="http://127.0.0.1:1" \
+    bash "$CHECK_SCRIPT" 2>&1
+  ) || exit_code=$?
+
+  assert_output_contains "api.elastic-cloud.com" "$output"
+  assert_output_contains "(default)" "$output"
+}
+
+test_no_default_indicator_when_custom_url() {
+  log_test "No default indicator when custom URLs provided"
+
+  start_mock_server "200" '{"status": "ok"}'
+
+  local output
+  local exit_code=0
+
+  output=$(
+    ELASTIC_CLOUD_CONNECTED_MODE_API_URL="${MOCK_SERVER_URL}" \
+    AUTOOPS_OTEL_URL="${MOCK_SERVER_URL}" \
+    bash "$CHECK_SCRIPT" 2>&1
+  ) || exit_code=$?
+
+  stop_mock_server
+
+  assert_output_not_contains "(default)" "$output"
 }
 
 test_elasticsearch_skipped() {
@@ -556,6 +592,8 @@ run_all_tests() {
   test_cloud_api_connection_refused
   test_otel_success
   test_otel_default_url
+  test_cloud_api_default_url
+  test_no_default_indicator_when_custom_url
   test_elasticsearch_skipped
   test_elasticsearch_success
   test_elasticsearch_with_api_key
