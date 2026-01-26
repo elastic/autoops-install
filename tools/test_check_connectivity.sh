@@ -347,7 +347,8 @@ test_elasticsearch_skipped() {
     bash "$CHECK_SCRIPT" 2>&1
   ) || exit_code=$?
 
-  assert_output_contains "AUTOOPS_ES_URL not set - skipping" "$output"
+  assert_output_contains "Elasticsearch check skipped (AUTOOPS_ES_URL not set)" "$output"
+  assert_output_contains "Set AUTOOPS_ES_URL to enable connectivity testing" "$output"
   assert_output_contains "Skipped: 1" "$output"
 }
 

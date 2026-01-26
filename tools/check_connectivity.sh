@@ -246,7 +246,8 @@ check_elasticsearch() {
   print_section "Elasticsearch"
 
   if [[ -z "${AUTOOPS_ES_URL:-}" ]]; then
-    print_info "AUTOOPS_ES_URL not set - skipping"
+    print_info "Elasticsearch check skipped (AUTOOPS_ES_URL not set)"
+    print_info "Set AUTOOPS_ES_URL to enable connectivity testing"
     ((CHECKS_SKIPPED++))
     return 0
   fi
