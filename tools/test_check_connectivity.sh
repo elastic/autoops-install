@@ -483,6 +483,49 @@ test_elasticsearch_ca_not_found() {
   assert_output_contains "CA certificate file not found" "$output"
 }
 
+test_elasticsearch_version_too_old() {
+  log_test "Elasticsearch - version below minimum 7.17.0"
+
+  start_mock_server "200" '{"cluster_name": "old-cluster", "version": {"number": "7.16.3"}}'
+
+  local output
+  local exit_code=0
+
+  output=$(
+    ELASTIC_CLOUD_CONNECTED_MODE_API_URL="http://127.0.0.1:1" \
+    AUTOOPS_OTEL_URL="http://127.0.0.1:1" \
+    AUTOOPS_ES_URL="${MOCK_SERVER_URL}" \
+    bash "$CHECK_SCRIPT" 2>&1
+  ) || exit_code=$?
+
+  stop_mock_server
+
+  assert_exit_code 1 "$exit_code"
+  assert_output_contains "Version: 7.16.3" "$output"
+  assert_output_contains "below the minimum required version 7.17.0" "$output"
+}
+
+test_elasticsearch_version_exact_minimum() {
+  log_test "Elasticsearch - version exactly at minimum 7.17.0"
+
+  start_mock_server "200" '{"cluster_name": "min-cluster", "version": {"number": "7.17.0"}}'
+
+  local output
+  local exit_code=0
+
+  output=$(
+    ELASTIC_CLOUD_CONNECTED_MODE_API_URL="http://127.0.0.1:1" \
+    AUTOOPS_OTEL_URL="http://127.0.0.1:1" \
+    AUTOOPS_ES_URL="${MOCK_SERVER_URL}" \
+    bash "$CHECK_SCRIPT" 2>&1
+  ) || exit_code=$?
+
+  stop_mock_server
+
+  assert_output_contains "Version: 7.17.0" "$output"
+  assert_output_not_contains "below the minimum" "$output"
+}
+
 test_value_masking_short() {
   log_test "Value masking - short values fully masked"
 
@@ -660,6 +703,8 @@ run_all_tests() {
   test_elasticsearch_auth_failure_401
   test_elasticsearch_auth_failure_403
   test_elasticsearch_ca_not_found
+  test_elasticsearch_version_too_old
+  test_elasticsearch_version_exact_minimum
   test_value_masking_short
   test_summary_all_pass
   test_summary_some_fail

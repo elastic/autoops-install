@@ -147,6 +147,32 @@ interpret_curl_error() {
 }
 
 # ---------------------------
+# Version comparison
+# ---------------------------
+
+# Compare two semver versions: returns 0 if $1 >= $2
+version_at_least() {
+  local version="$1"
+  local minimum="$2"
+
+  local v_major v_minor v_patch
+  local m_major m_minor m_patch
+
+  IFS='.' read -r v_major v_minor v_patch <<< "$version"
+  IFS='.' read -r m_major m_minor m_patch <<< "$minimum"
+
+  v_patch="${v_patch:-0}"
+  m_patch="${m_patch:-0}"
+
+  if (( v_major > m_major )); then return 0; fi
+  if (( v_major < m_major )); then return 1; fi
+  if (( v_minor > m_minor )); then return 0; fi
+  if (( v_minor < m_minor )); then return 1; fi
+  if (( v_patch >= m_patch )); then return 0; fi
+  return 1
+}
+
+# ---------------------------
 # Check 1: Proxy Configuration
 # ---------------------------
 
@@ -381,6 +407,11 @@ check_elasticsearch() {
         fi
         if [[ -n "$version" ]]; then
           print_info "Version: $version"
+          if ! version_at_least "$version" "7.17.0"; then
+            print_error "Elasticsearch version $version is below the minimum required version 7.17.0"
+            ((CHECKS_FAILED++))
+            return 1
+          fi
         fi
       fi
 
