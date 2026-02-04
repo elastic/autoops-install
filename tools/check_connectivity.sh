@@ -446,12 +446,18 @@ check_elasticsearch() {
           return 1
         fi
 
-        # Extract license status from response
+        # Extract license status and type from response
         local license_status
+        local license_type
         license_status=$(grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' "${RESPONSE_FILE}" 2>/dev/null | head -1 | sed 's/.*:.*"\([^"]*\)".*/\1/')
+        license_type=$(grep -o '"type"[[:space:]]*:[[:space:]]*"[^"]*"' "${RESPONSE_FILE}" 2>/dev/null | head -1 | sed 's/.*:.*"\([^"]*\)".*/\1/')
 
         if [[ "$license_status" == "active" ]]; then
-          print_success "License: active"
+          if [[ -n "$license_type" ]]; then
+            print_success "License: active ($license_type)"
+          else
+            print_success "License: active"
+          fi
         elif [[ -n "$license_status" ]]; then
           print_error "License status is \"$license_status\" (expected \"active\")"
           ((CHECKS_FAILED++))
