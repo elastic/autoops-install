@@ -179,6 +179,62 @@ EOF
   export MOCK_SERVER_URL="http://127.0.0.1:${MOCK_SERVER_PORT}"
 }
 
+# Path-aware mock server: returns different responses for different paths
+# Usage: start_path_mock_server <num_requests> <path1> <code1> <body1> [<path2> <code2> <body2> ...]
+start_path_mock_server() {
+  local num_requests="$1"
+  shift
+
+  MOCK_SERVER_DIR=$(mktemp -d)
+  MOCK_SERVER_PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("", 0)); print(s.getsockname()[1]); s.close()')
+
+  # Build Python route dictionary from arguments
+  local routes_py="{"
+  local first=true
+  while [[ $# -ge 3 ]]; do
+    local path="$1" code="$2" body="$3"
+    shift 3
+    if [[ "$first" == "true" ]]; then
+      first=false
+    else
+      routes_py+=", "
+    fi
+    routes_py+="\"${path}\": (${code}, '${body}')"
+  done
+  routes_py+="}"
+
+  cat > "${MOCK_SERVER_DIR}/server.py" << PYEOF
+import http.server
+
+ROUTES = ${routes_py}
+
+class MockHandler(http.server.BaseHTTPRequestHandler):
+    def log_message(self, format, *args):
+        pass
+
+    def do_GET(self):
+        code, body = ROUTES.get(self.path, (404, '{"error": "not found"}'))
+        self.send_response(code)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(body.encode())
+
+    def do_POST(self):
+        self.do_GET()
+
+if __name__ == '__main__':
+    server = http.server.HTTPServer(('127.0.0.1', ${MOCK_SERVER_PORT}), MockHandler)
+    for _ in range(${num_requests}):
+        server.handle_request()
+PYEOF
+
+  python3 "${MOCK_SERVER_DIR}/server.py" &
+  MOCK_SERVER_PID=$!
+  sleep 0.3
+
+  export MOCK_SERVER_URL="http://127.0.0.1:${MOCK_SERVER_PORT}"
+}
+
 # Cleanup on exit
 cleanup() {
   stop_mock_server
@@ -357,7 +413,9 @@ test_elasticsearch_skipped() {
 test_elasticsearch_success() {
   log_test "Elasticsearch - successful connection"
 
-  start_mock_server "200" '{"cluster_name": "test-cluster", "version": {"number": "8.12.0"}}'
+  start_path_mock_server 2 \
+    "/" 200 '{"cluster_name": "test-cluster", "version": {"number": "8.12.0"}}' \
+    "/_license" 200 '{"license": {"status": "active"}}'
 
   local output
   local exit_code=0
@@ -374,12 +432,15 @@ test_elasticsearch_success() {
   assert_output_contains "Connected successfully (HTTP 200)" "$output"
   assert_output_contains "Cluster: test-cluster" "$output"
   assert_output_contains "Version: 8.12.0" "$output"
+  assert_output_contains "License: active" "$output"
 }
 
 test_elasticsearch_with_api_key() {
   log_test "Elasticsearch - API key authentication display"
 
-  start_mock_server "200" '{"cluster_name": "test-cluster"}'
+  start_path_mock_server 2 \
+    "/" 200 '{"cluster_name": "test-cluster", "version": {"number": "8.12.0"}}' \
+    "/_license" 200 '{"license": {"status": "active"}}'
 
   local output
   local exit_code=0
@@ -400,7 +461,9 @@ test_elasticsearch_with_api_key() {
 test_elasticsearch_with_basic_auth() {
   log_test "Elasticsearch - Basic authentication display"
 
-  start_mock_server "200" '{"cluster_name": "test-cluster"}'
+  start_path_mock_server 2 \
+    "/" 200 '{"cluster_name": "test-cluster", "version": {"number": "8.12.0"}}' \
+    "/_license" 200 '{"license": {"status": "active"}}'
 
   local output
   local exit_code=0
@@ -508,7 +571,9 @@ test_elasticsearch_version_too_old() {
 test_elasticsearch_version_exact_minimum() {
   log_test "Elasticsearch - version exactly at minimum 7.17.0"
 
-  start_mock_server "200" '{"cluster_name": "min-cluster", "version": {"number": "7.17.0"}}'
+  start_path_mock_server 2 \
+    "/" 200 '{"cluster_name": "min-cluster", "version": {"number": "7.17.0"}}' \
+    "/_license" 200 '{"license": {"status": "active"}}'
 
   local output
   local exit_code=0
@@ -526,10 +591,58 @@ test_elasticsearch_version_exact_minimum() {
   assert_output_not_contains "below the minimum" "$output"
 }
 
+test_elasticsearch_license_inactive() {
+  log_test "Elasticsearch - license not active"
+
+  start_path_mock_server 2 \
+    "/" 200 '{"cluster_name": "test-cluster", "version": {"number": "8.12.0"}}' \
+    "/_license" 200 '{"license": {"status": "expired"}}'
+
+  local output
+  local exit_code=0
+
+  output=$(
+    ELASTIC_CLOUD_CONNECTED_MODE_API_URL="http://127.0.0.1:1" \
+    AUTOOPS_OTEL_URL="http://127.0.0.1:1" \
+    AUTOOPS_ES_URL="${MOCK_SERVER_URL}" \
+    bash "$CHECK_SCRIPT" 2>&1
+  ) || exit_code=$?
+
+  stop_mock_server
+
+  assert_exit_code 1 "$exit_code"
+  assert_output_contains 'License status is "expired"' "$output"
+}
+
+test_elasticsearch_license_active() {
+  log_test "Elasticsearch - license active"
+
+  start_path_mock_server 2 \
+    "/" 200 '{"cluster_name": "test-cluster", "version": {"number": "8.12.0"}}' \
+    "/_license" 200 '{"license": {"status": "active"}}'
+
+  local output
+  local exit_code=0
+
+  output=$(
+    ELASTIC_CLOUD_CONNECTED_MODE_API_URL="http://127.0.0.1:1" \
+    AUTOOPS_OTEL_URL="http://127.0.0.1:1" \
+    AUTOOPS_ES_URL="${MOCK_SERVER_URL}" \
+    bash "$CHECK_SCRIPT" 2>&1
+  ) || exit_code=$?
+
+  stop_mock_server
+
+  assert_output_contains "License: active" "$output"
+  assert_output_not_contains "License status is" "$output"
+}
+
 test_value_masking_short() {
   log_test "Value masking - short values fully masked"
 
-  start_mock_server "200" '{}'
+  start_path_mock_server 2 \
+    "/" 200 '{"cluster_name": "test", "version": {"number": "8.12.0"}}' \
+    "/_license" 200 '{"license": {"status": "active"}}'
 
   local output
   local exit_code=0
@@ -551,7 +664,11 @@ test_value_masking_short() {
 test_summary_all_pass() {
   log_test "Summary - all checks pass"
 
-  start_multi_mock_server "200" '{"cluster_name": "test"}' 5
+  start_path_mock_server 4 \
+    "/api/v1/cloud-connected/clusters" 200 '{"ok": true}' \
+    "/v1/logs" 200 '{"ok": true}' \
+    "/" 200 '{"cluster_name": "test", "version": {"number": "8.12.0"}}' \
+    "/_license" 200 '{"license": {"status": "active"}}'
 
   local output
   local exit_code=0
@@ -705,6 +822,8 @@ run_all_tests() {
   test_elasticsearch_ca_not_found
   test_elasticsearch_version_too_old
   test_elasticsearch_version_exact_minimum
+  test_elasticsearch_license_inactive
+  test_elasticsearch_license_active
   test_value_masking_short
   test_summary_all_pass
   test_summary_some_fail

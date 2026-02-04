@@ -413,6 +413,53 @@ check_elasticsearch() {
             return 1
           fi
         fi
+
+        # Check license status
+        local license_url="${AUTOOPS_ES_URL%/}/_license"
+        print_check "license status at ${license_url}"
+
+        local license_http_code
+        local license_curl_exit
+
+        license_http_code=$(curl -sS \
+          "${ca_opts[@]}" \
+          "${auth_opts[@]}" \
+          -w "%{http_code}" \
+          -o "${RESPONSE_FILE}" \
+          --connect-timeout 10 \
+          --max-time 30 \
+          "${license_url}" 2>"${ERROR_FILE}") || license_curl_exit=$?
+
+        license_curl_exit=${license_curl_exit:-0}
+
+        if [[ $license_curl_exit -ne 0 ]]; then
+          local error_msg
+          error_msg=$(interpret_curl_error "$license_curl_exit" "$(cat "${ERROR_FILE}" 2>/dev/null)")
+          print_error "License check failed: $error_msg"
+          ((CHECKS_FAILED++))
+          return 1
+        fi
+
+        if [[ "$license_http_code" != "200" ]]; then
+          print_error "License check failed (HTTP $license_http_code)"
+          ((CHECKS_FAILED++))
+          return 1
+        fi
+
+        # Extract license status from response
+        local license_status
+        license_status=$(grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' "${RESPONSE_FILE}" 2>/dev/null | head -1 | sed 's/.*:.*"\([^"]*\)".*/\1/')
+
+        if [[ "$license_status" == "active" ]]; then
+          print_success "License: active"
+        elif [[ -n "$license_status" ]]; then
+          print_error "License status is \"$license_status\" (expected \"active\")"
+          ((CHECKS_FAILED++))
+          return 1
+        else
+          print_warning "Could not determine license status from response"
+          ((CHECKS_WARNED++))
+        fi
       fi
 
       if [[ -n "$ca_warning" ]]; then
