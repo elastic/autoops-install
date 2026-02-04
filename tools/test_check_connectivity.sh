@@ -415,7 +415,7 @@ test_elasticsearch_success() {
 
   start_path_mock_server 2 \
     "/" 200 '{"cluster_name": "test-cluster", "version": {"number": "8.12.0"}}' \
-    "/_license" 200 '{"license": {"status": "active", "type": "basic"}}'
+    "/_license" 200 '{"license": {"status": "active", "type": "basic", "uid": "test-uid-1234"}}'
 
   local output
   local exit_code=0
@@ -432,7 +432,7 @@ test_elasticsearch_success() {
   assert_output_contains "Connected successfully (HTTP 200)" "$output"
   assert_output_contains "Cluster: test-cluster" "$output"
   assert_output_contains "Version: 8.12.0" "$output"
-  assert_output_contains "License: active (basic)" "$output"
+  assert_output_contains "License: active (basic: test-uid-1234)" "$output"
 }
 
 test_elasticsearch_with_api_key() {
@@ -440,7 +440,7 @@ test_elasticsearch_with_api_key() {
 
   start_path_mock_server 2 \
     "/" 200 '{"cluster_name": "test-cluster", "version": {"number": "8.12.0"}}' \
-    "/_license" 200 '{"license": {"status": "active", "type": "basic"}}'
+    "/_license" 200 '{"license": {"status": "active", "type": "basic", "uid": "test-uid-1234"}}'
 
   local output
   local exit_code=0
@@ -463,7 +463,7 @@ test_elasticsearch_with_basic_auth() {
 
   start_path_mock_server 2 \
     "/" 200 '{"cluster_name": "test-cluster", "version": {"number": "8.12.0"}}' \
-    "/_license" 200 '{"license": {"status": "active", "type": "basic"}}'
+    "/_license" 200 '{"license": {"status": "active", "type": "basic", "uid": "test-uid-1234"}}'
 
   local output
   local exit_code=0
@@ -573,7 +573,7 @@ test_elasticsearch_version_exact_minimum() {
 
   start_path_mock_server 2 \
     "/" 200 '{"cluster_name": "min-cluster", "version": {"number": "7.17.0"}}' \
-    "/_license" 200 '{"license": {"status": "active", "type": "basic"}}'
+    "/_license" 200 '{"license": {"status": "active", "type": "basic", "uid": "test-uid-1234"}}'
 
   local output
   local exit_code=0
@@ -619,7 +619,7 @@ test_elasticsearch_license_active() {
 
   start_path_mock_server 2 \
     "/" 200 '{"cluster_name": "test-cluster", "version": {"number": "8.12.0"}}' \
-    "/_license" 200 '{"license": {"status": "active", "type": "basic"}}'
+    "/_license" 200 '{"license": {"status": "active", "type": "basic", "uid": "test-uid-1234"}}'
 
   local output
   local exit_code=0
@@ -633,7 +633,7 @@ test_elasticsearch_license_active() {
 
   stop_mock_server
 
-  assert_output_contains "License: active (basic)" "$output"
+  assert_output_contains "License: active (basic: test-uid-1234)" "$output"
   assert_output_not_contains "License status is" "$output"
 }
 
@@ -642,7 +642,7 @@ test_value_masking_short() {
 
   start_path_mock_server 2 \
     "/" 200 '{"cluster_name": "test", "version": {"number": "8.12.0"}}' \
-    "/_license" 200 '{"license": {"status": "active", "type": "basic"}}'
+    "/_license" 200 '{"license": {"status": "active", "type": "basic", "uid": "test-uid-1234"}}'
 
   local output
   local exit_code=0
@@ -668,7 +668,7 @@ test_summary_all_pass() {
     "/api/v1/cloud-connected/clusters" 200 '{"ok": true}' \
     "/v1/logs" 200 '{"ok": true}' \
     "/" 200 '{"cluster_name": "test", "version": {"number": "8.12.0"}}' \
-    "/_license" 200 '{"license": {"status": "active", "type": "basic"}}'
+    "/_license" 200 '{"license": {"status": "active", "type": "basic", "uid": "test-uid-1234"}}'
 
   local output
   local exit_code=0
