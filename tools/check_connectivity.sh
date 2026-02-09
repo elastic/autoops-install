@@ -219,6 +219,11 @@ check_proxy() {
     print_info "INFO: No proxy detected; using direct connection."
   else
     PROXY_CONFIGURED=true
+
+    # Warn if HTTP proxy is set but HTTPS proxy is missing
+    if [[ -n "${HTTP_PROXY:-}${http_proxy:-}" && -z "${HTTPS_PROXY:-}" && -z "${https_proxy:-}" ]]; then
+      print_warning "WARNING: Proxy found, but HTTPS_PROXY is missing."
+    fi
   fi
 }
 

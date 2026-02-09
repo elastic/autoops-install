@@ -284,6 +284,41 @@ test_proxy_detection_with_proxy() {
   assert_output_contains "myproxy.example.com" "$output"
 }
 
+test_proxy_http_without_https() {
+  log_test "Proxy detection - HTTP_PROXY set without HTTPS_PROXY"
+
+  local output
+  local exit_code=0
+
+  output=$(
+    unset http_proxy https_proxy HTTPS_PROXY no_proxy NO_PROXY all_proxy ALL_PROXY
+    HTTP_PROXY="http://myproxy.example.com:8080" \
+    ELASTIC_CLOUD_CONNECTED_MODE_API_URL="http://127.0.0.1:1" \
+    AUTOOPS_OTEL_URL="http://127.0.0.1:1" \
+    bash "$CHECK_SCRIPT" 2>&1
+  ) || exit_code=$?
+
+  assert_output_contains "WARNING: Proxy found, but HTTPS_PROXY is missing." "$output"
+}
+
+test_proxy_no_warning_when_https_set() {
+  log_test "Proxy detection - no warning when HTTPS_PROXY is set"
+
+  local output
+  local exit_code=0
+
+  output=$(
+    unset http_proxy https_proxy no_proxy all_proxy
+    HTTP_PROXY="http://myproxy.example.com:8080" \
+    HTTPS_PROXY="http://secureproxy.example.com:8443" \
+    ELASTIC_CLOUD_CONNECTED_MODE_API_URL="http://127.0.0.1:1" \
+    AUTOOPS_OTEL_URL="http://127.0.0.1:1" \
+    bash "$CHECK_SCRIPT" 2>&1
+  ) || exit_code=$?
+
+  assert_output_not_contains "HTTPS_PROXY is missing" "$output"
+}
+
 test_cloud_api_success() {
   log_test "Cloud API - successful connection"
 
@@ -928,6 +963,8 @@ run_all_tests() {
   # Run tests
   test_proxy_detection
   test_proxy_detection_with_proxy
+  test_proxy_http_without_https
+  test_proxy_no_warning_when_https_set
   test_cloud_api_success
   test_cloud_api_connection_refused
   test_otel_success
