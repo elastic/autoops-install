@@ -352,7 +352,7 @@ test_cloud_api_connection_refused() {
   ) || exit_code=$?
 
   assert_exit_code 1 "$exit_code"
-  assert_output_contains "Connection failed" "$output"
+  assert_output_contains "FAIL:" "$output"
 }
 
 test_otel_success() {
