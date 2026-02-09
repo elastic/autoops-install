@@ -85,6 +85,10 @@ print_info() {
   echo "  INFO: $1"
 }
 
+print_skipping() {
+  echo "  SKIP: $1"
+}
+
 # Mask sensitive values in output (e.g. API keys, passwords)
 mask_value() {
   echo "**REDACTED**"
@@ -338,8 +342,7 @@ check_elasticsearch() {
   print_section "Elasticsearch"
 
   if [[ -z "${AUTOOPS_ES_URL:-}" ]]; then
-    print_info "Elasticsearch check skipped (AUTOOPS_ES_URL not set)"
-    print_info "Set AUTOOPS_ES_URL to enable connectivity testing"
+    print_skipping "Elasticsearch check skipped (AUTOOPS_ES_URL not set). Set AUTOOPS_ES_URL to enable connectivity testing"
     ((CHECKS_SKIPPED++))
     return 0
   fi
