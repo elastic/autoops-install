@@ -85,15 +85,9 @@ print_info() {
   echo "  $1"
 }
 
-# Mask sensitive values: show first 4 and last 4 characters
+# Mask sensitive values in output (e.g. API keys, passwords)
 mask_value() {
-  local value="$1"
-  local len=${#value}
-  if [[ $len -le 8 ]]; then
-    echo "****"
-  else
-    echo "${value:0:4}...${value: -4}"
-  fi
+  echo "**REDACTED**"
 }
 
 # ---------------------------
@@ -217,7 +211,7 @@ check_proxy() {
     local value="${!var:-}"
     if [[ -n "$value" ]]; then
       proxy_found=1
-      print_info "$var=$(mask_value "$value")"
+      print_info "$var=$value"
     fi
   done
 
