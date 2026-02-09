@@ -24,7 +24,7 @@
 # ---------------------------
 
 if ! command -v curl &> /dev/null; then
-  echo "Error: 'curl' is required but not installed"
+  echo "FAIL: 'curl' is required but not installed."
   exit 1
 fi
 

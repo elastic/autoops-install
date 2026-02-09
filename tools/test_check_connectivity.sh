@@ -720,8 +720,7 @@ test_curl_not_installed() {
   rm -rf "${temp_bin}"
 
   assert_exit_code 1 "$exit_code"
-  assert_output_contains "curl" "$output"
-  assert_output_contains "required" "$output"
+  assert_output_contains "FAIL: 'curl' is required but not installed." "$output"
 }
 
 test_debug_flag_shows_http_code() {
