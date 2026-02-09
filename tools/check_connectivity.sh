@@ -271,9 +271,9 @@ check_cloud_api() {
 
   # Any HTTP response means connectivity works (even 4xx/5xx)
   if [[ "$DEBUG" == "true" ]]; then
-    print_success "Connected (HTTP $http_code)"
+    print_success "SUCCESS: Reachable. Can register to Elastic Cloud. (HTTP $http_code)"
   else
-    print_success "Connected"
+    print_success "SUCCESS: Reachable. Can register to Elastic Cloud."
   fi
   ((CHECKS_PASSED++))
   return 0

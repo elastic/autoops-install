@@ -335,7 +335,7 @@ test_cloud_api_success() {
 
   stop_mock_server
 
-  assert_output_contains "Connected" "$output"
+  assert_output_contains "SUCCESS: Reachable. Can register to Elastic Cloud." "$output"
   assert_output_not_contains "HTTP 200" "$output"
 }
 
@@ -774,7 +774,7 @@ test_debug_flag_shows_http_code() {
 
   stop_mock_server
 
-  assert_output_contains "Connected (HTTP 200)" "$output"
+  assert_output_contains "Can register to Elastic Cloud. (HTTP 200)" "$output"
 }
 
 test_debug_flag_otel_shows_http_code() {
