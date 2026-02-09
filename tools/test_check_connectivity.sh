@@ -775,6 +775,128 @@ test_unknown_argument() {
   assert_output_contains "Usage:" "$output"
 }
 
+test_elasticsearch_version_too_old() {
+  log_test "Elasticsearch - version below minimum 7.17.0"
+
+  start_mock_server "200" '{"cluster_name": "old-cluster", "version": {"number": "7.16.3"}}'
+
+  local output
+  local exit_code=0
+
+  output=$(
+    ELASTIC_CLOUD_CONNECTED_MODE_API_URL="http://127.0.0.1:1" \
+    AUTOOPS_OTEL_URL="http://127.0.0.1:1" \
+    AUTOOPS_ES_URL="${MOCK_SERVER_URL}" \
+    bash "$CHECK_SCRIPT" 2>&1
+  ) || exit_code=$?
+
+  stop_mock_server
+
+  assert_exit_code 1 "$exit_code"
+  assert_output_contains "Version: 7.16.3" "$output"
+  assert_output_contains "below the minimum required version 7.17.0" "$output"
+}
+
+test_elasticsearch_version_exact_minimum() {
+  log_test "Elasticsearch - version exactly at minimum 7.17.0"
+
+  start_path_mock_server 2 \
+    "/" 200 '{"cluster_name": "min-cluster", "version": {"number": "7.17.0"}}' \
+    "/_license" 200 '{"license": {"status": "active"}}'
+
+  local output
+  local exit_code=0
+
+  output=$(
+    ELASTIC_CLOUD_CONNECTED_MODE_API_URL="http://127.0.0.1:1" \
+    AUTOOPS_OTEL_URL="http://127.0.0.1:1" \
+    AUTOOPS_ES_URL="${MOCK_SERVER_URL}" \
+    bash "$CHECK_SCRIPT" 2>&1
+  ) || exit_code=$?
+
+  stop_mock_server
+
+  assert_output_contains "Version: 7.17.0" "$output"
+  assert_output_not_contains "below the minimum" "$output"
+}
+
+test_elasticsearch_license_inactive() {
+  log_test "Elasticsearch - license not active"
+
+  start_path_mock_server 2 \
+    "/" 200 '{"cluster_name": "test-cluster", "version": {"number": "8.12.0"}}' \
+    "/_license" 200 '{"license": {"status": "expired"}}'
+
+  local output
+  local exit_code=0
+
+  output=$(
+    ELASTIC_CLOUD_CONNECTED_MODE_API_URL="http://127.0.0.1:1" \
+    AUTOOPS_OTEL_URL="http://127.0.0.1:1" \
+    AUTOOPS_ES_URL="${MOCK_SERVER_URL}" \
+    bash "$CHECK_SCRIPT" 2>&1
+  ) || exit_code=$?
+
+  stop_mock_server
+
+  assert_exit_code 1 "$exit_code"
+  assert_output_contains 'License status is "expired"' "$output"
+}
+
+test_elasticsearch_license_active() {
+  log_test "Elasticsearch - license active with type and uid"
+
+  start_path_mock_server 2 \
+    "/" 200 '{"cluster_name": "test-cluster", "version": {"number": "8.12.0"}}' \
+    "/_license" 200 '{"license": {"status": "active", "type": "platinum", "uid": "abcd-1234-efgh"}}'
+
+  local output
+  local exit_code=0
+
+  output=$(
+    ELASTIC_CLOUD_CONNECTED_MODE_API_URL="http://127.0.0.1:1" \
+    AUTOOPS_OTEL_URL="http://127.0.0.1:1" \
+    AUTOOPS_ES_URL="${MOCK_SERVER_URL}" \
+    bash "$CHECK_SCRIPT" 2>&1
+  ) || exit_code=$?
+
+  stop_mock_server
+
+  assert_output_contains "License: active (platinum: abcd-1234-efgh)" "$output"
+}
+
+test_proxy_hint_on_connection_failure() {
+  log_test "Proxy hint - shown when proxy configured and connection fails"
+
+  local output
+  local exit_code=0
+
+  output=$(
+    HTTP_PROXY="http://proxy.example.com:8080" \
+    ELASTIC_CLOUD_CONNECTED_MODE_API_URL="http://127.0.0.1:1" \
+    AUTOOPS_OTEL_URL="http://127.0.0.1:1" \
+    bash "$CHECK_SCRIPT" 2>&1
+  ) || exit_code=$?
+
+  assert_output_contains "proxy is configured" "$output"
+}
+
+test_no_proxy_hint_without_proxy() {
+  log_test "Proxy hint - not shown when no proxy configured"
+
+  local output
+  local exit_code=0
+
+  output=$(
+    unset HTTP_PROXY HTTPS_PROXY http_proxy https_proxy ALL_PROXY all_proxy NO_PROXY no_proxy
+    ELASTIC_CLOUD_CONNECTED_MODE_API_URL="http://127.0.0.1:1" \
+    AUTOOPS_OTEL_URL="http://127.0.0.1:1" \
+    bash "$CHECK_SCRIPT" 2>&1
+  ) || exit_code=$?
+
+  assert_output_not_contains "proxy is configured" "$output"
+}
+
 # ---------------------------
 # Run all tests
 # ---------------------------
@@ -831,6 +953,8 @@ run_all_tests() {
   test_debug_flag_shows_http_code
   test_debug_flag_otel_shows_http_code
   test_unknown_argument
+  test_proxy_hint_on_connection_failure
+  test_no_proxy_hint_without_proxy
 
   # Print summary
   echo ""
