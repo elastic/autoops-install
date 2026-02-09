@@ -376,7 +376,7 @@ check_elasticsearch() {
     print_info "CA: ${AUTOOPS_ES_CA}"
 
     if [[ ! -f "${AUTOOPS_ES_CA}" ]]; then
-      print_error "CA certificate file not found: ${AUTOOPS_ES_CA}"
+      print_error "CA certificate file not found: ${AUTOOPS_ES_CA}."
       ((CHECKS_FAILED++))
       return 1
     fi
@@ -399,7 +399,7 @@ check_elasticsearch() {
 
     # If connection succeeded without CA, warn the user
     if [[ $test_curl_exit -eq 0 ]]; then
-      ca_warning="CA certificate may not be required (connection succeeded without it)"
+      ca_warning="Connection secure without provided CA file."
     fi
 
     ca_opts=(--cacert "${AUTOOPS_ES_CA}")
