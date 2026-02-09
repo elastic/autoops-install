@@ -464,7 +464,7 @@ test_elasticsearch_success() {
 
   stop_mock_server
 
-  assert_output_contains "Connected successfully (HTTP 200)" "$output"
+  assert_output_contains "SUCCESS: Connected successfully (HTTP 200)" "$output"
   assert_output_contains "Cluster: test-cluster" "$output"
   assert_output_contains "Version: 8.12.0" "$output"
   assert_output_contains "License: active (basic: test-uid-1234)" "$output"

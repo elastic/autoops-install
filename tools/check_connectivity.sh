@@ -433,7 +433,7 @@ check_elasticsearch() {
   # Handle HTTP errors
   case "$http_code" in
     200)
-      print_success "Connected successfully (HTTP 200)"
+      print_success "SUCCESS: Connected successfully (HTTP 200)"
 
       # Try to extract cluster info from response
       if [[ -f "${RESPONSE_FILE}" ]]; then
