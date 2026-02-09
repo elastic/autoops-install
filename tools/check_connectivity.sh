@@ -66,23 +66,23 @@ print_section() {
 }
 
 print_check() {
-  echo "  Checking $1..."
+  echo "  INFO: Checking $1..."
 }
 
 print_success() {
-  echo "  $1"
+  echo "  SUCCESS: $1"
 }
 
 print_warning() {
-  echo "  $1"
+  echo "  WARNING: $1"
 }
 
 print_error() {
-  echo "  $1"
+  echo "  FAIL: $1"
 }
 
 print_info() {
-  echo "  $1"
+  echo "  INFO: $1"
 }
 
 # Mask sensitive values in output (e.g. API keys, passwords)
@@ -216,13 +216,13 @@ check_proxy() {
   done
 
   if [[ $proxy_found -eq 0 ]]; then
-    print_info "INFO: No proxy detected; using direct connection."
+    print_info "No proxy detected; using direct connection."
   else
     PROXY_CONFIGURED=true
 
     # Warn if HTTP proxy is set but HTTPS proxy is missing
     if [[ -n "${HTTP_PROXY:-}${http_proxy:-}" && -z "${HTTPS_PROXY:-}" && -z "${https_proxy:-}" ]]; then
-      print_warning "WARNING: Proxy found, but HTTPS_PROXY is missing."
+      print_warning "Proxy found, but HTTPS_PROXY is missing."
     fi
   fi
 }
@@ -261,7 +261,7 @@ check_cloud_api() {
   if [[ $curl_exit -ne 0 ]]; then
     local error_msg
     error_msg=$(interpret_curl_error "$curl_exit" "$(cat "${ERROR_FILE}" 2>/dev/null)")
-    print_error "FAIL: $error_msg"
+    print_error "$error_msg"
     if [[ "$PROXY_CONFIGURED" == "true" && "$curl_exit" != "5" && "$curl_exit" != "97" ]]; then
       print_warning "A proxy is configured — this may be causing the connection failure"
     fi
@@ -271,9 +271,9 @@ check_cloud_api() {
 
   # Any HTTP response means connectivity works (even 4xx/5xx)
   if [[ "$DEBUG" == "true" ]]; then
-    print_success "SUCCESS: Reachable. Can register to Elastic Cloud. (HTTP $http_code)"
+    print_success "Reachable. Can register to Elastic Cloud. (HTTP $http_code)"
   else
-    print_success "SUCCESS: Reachable. Can register to Elastic Cloud."
+    print_success "Reachable. Can register to Elastic Cloud."
   fi
   ((CHECKS_PASSED++))
   return 0
@@ -313,7 +313,7 @@ check_otel() {
   if [[ $curl_exit -ne 0 ]]; then
     local error_msg
     error_msg=$(interpret_curl_error "$curl_exit" "$(cat "${ERROR_FILE}" 2>/dev/null)")
-    print_error "FAIL: $error_msg"
+    print_error "$error_msg"
     if [[ "$PROXY_CONFIGURED" == "true" && "$curl_exit" != "5" && "$curl_exit" != "97" ]]; then
       print_warning "A proxy is configured — this may be causing the connection failure"
     fi
@@ -322,9 +322,9 @@ check_otel() {
   fi
 
   if [[ "$DEBUG" == "true" ]]; then
-    print_success "SUCCESS: Reachable. Can ship metrics to Elastic Cloud. (HTTP $http_code)"
+    print_success "Reachable. Can ship metrics to Elastic Cloud. (HTTP $http_code)"
   else
-    print_success "SUCCESS: Reachable. Can ship metrics to Elastic Cloud."
+    print_success "Reachable. Can ship metrics to Elastic Cloud."
   fi
   ((CHECKS_PASSED++))
   return 0
@@ -422,7 +422,7 @@ check_elasticsearch() {
   if [[ $curl_exit -ne 0 ]]; then
     local error_msg
     error_msg=$(interpret_curl_error "$curl_exit" "$(cat "${ERROR_FILE}" 2>/dev/null)")
-    print_error "FAIL: $error_msg"
+    print_error "$error_msg"
     if [[ "$PROXY_CONFIGURED" == "true" && "$curl_exit" != "5" && "$curl_exit" != "97" ]]; then
       print_warning "A proxy is configured — this may be causing the connection failure"
     fi
@@ -433,7 +433,7 @@ check_elasticsearch() {
   # Handle HTTP errors
   case "$http_code" in
     200)
-      print_success "SUCCESS: Connected successfully (HTTP 200)"
+      print_success "Connected successfully (HTTP 200)"
 
       # Try to extract cluster info from response
       if [[ -f "${RESPONSE_FILE}" ]]; then
@@ -524,12 +524,12 @@ check_elasticsearch() {
       return 0
       ;;
     401)
-      print_error "Authentication failed (HTTP 401 Unauthorized)"
+      print_error "Authentication failed (HTTP 401 Unauthorized). Check for typos."
       ((CHECKS_FAILED++))
       return 1
       ;;
     403)
-      print_error "Authorization denied (HTTP 403 Forbidden)"
+      print_error "Authorization denied (HTTP 403 Forbidden)."
       ((CHECKS_FAILED++))
       return 1
       ;;

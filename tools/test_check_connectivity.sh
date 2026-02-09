@@ -465,8 +465,8 @@ test_elasticsearch_success() {
   stop_mock_server
 
   assert_output_contains "SUCCESS: Connected successfully (HTTP 200)" "$output"
-  assert_output_contains "Cluster: test-cluster" "$output"
-  assert_output_contains "Version: 8.12.0" "$output"
+  assert_output_contains "INFO: Cluster: test-cluster" "$output"
+  assert_output_contains "INFO: Version: 8.12.0" "$output"
   assert_output_contains "License: active (basic: test-uid-1234)" "$output"
 }
 
@@ -538,7 +538,7 @@ test_elasticsearch_auth_failure_401() {
   stop_mock_server
 
   assert_exit_code 1 "$exit_code"
-  assert_output_contains "Authentication failed (HTTP 401 Unauthorized)" "$output"
+  assert_output_contains "Authentication failed (HTTP 401 Unauthorized). Check for typos." "$output"
 }
 
 test_elasticsearch_auth_failure_403() {
@@ -599,7 +599,7 @@ test_elasticsearch_version_too_old() {
   stop_mock_server
 
   assert_exit_code 1 "$exit_code"
-  assert_output_contains "Version: 7.16.3" "$output"
+  assert_output_contains "INFO: Version: 7.16.3" "$output"
   assert_output_contains "below the minimum required version 7.17.0" "$output"
 }
 
@@ -622,7 +622,7 @@ test_elasticsearch_version_exact_minimum() {
 
   stop_mock_server
 
-  assert_output_contains "Version: 7.17.0" "$output"
+  assert_output_contains "INFO: Version: 7.17.0" "$output"
   assert_output_not_contains "below the minimum" "$output"
 }
 
@@ -827,7 +827,7 @@ test_elasticsearch_version_too_old() {
   stop_mock_server
 
   assert_exit_code 1 "$exit_code"
-  assert_output_contains "Version: 7.16.3" "$output"
+  assert_output_contains "INFO: Version: 7.16.3" "$output"
   assert_output_contains "below the minimum required version 7.17.0" "$output"
 }
 
@@ -850,7 +850,7 @@ test_elasticsearch_version_exact_minimum() {
 
   stop_mock_server
 
-  assert_output_contains "Version: 7.17.0" "$output"
+  assert_output_contains "INFO: Version: 7.17.0" "$output"
   assert_output_not_contains "below the minimum" "$output"
 }
 
