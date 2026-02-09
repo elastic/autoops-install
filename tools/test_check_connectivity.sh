@@ -718,7 +718,7 @@ test_summary_all_pass() {
   stop_mock_server
 
   assert_exit_code 0 "$exit_code"
-  assert_output_contains "Result: All checks passed" "$output"
+  assert_output_contains "SUCCESS: All checks passed. The environment is ready to use AutoOps." "$output"
 }
 
 test_summary_some_fail() {
@@ -734,7 +734,7 @@ test_summary_some_fail() {
   ) || exit_code=$?
 
   assert_exit_code 1 "$exit_code"
-  assert_output_contains "Result: Some checks failed" "$output"
+  assert_output_contains "FAIL: Connectivity issues detected. AutoOps Agent will not function." "$output"
 }
 
 test_curl_not_installed() {

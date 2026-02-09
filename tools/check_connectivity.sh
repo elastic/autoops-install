@@ -567,10 +567,10 @@ print_summary() {
   echo ""
 
   if [[ $CHECKS_FAILED -gt 0 ]]; then
-    echo "  Result: Some checks failed"
+    print_error "Connectivity issues detected. AutoOps Agent will not function. Review troubleshooting guide and address issues before running the agent."
     return 1
   else
-    echo "  Result: All checks passed"
+    print_success "All checks passed. The environment is ready to use AutoOps."
     return 0
   fi
 }
