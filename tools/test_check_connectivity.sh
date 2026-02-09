@@ -372,7 +372,7 @@ test_otel_success() {
   stop_mock_server
 
   assert_output_contains "OTel Endpoint" "$output"
-  assert_output_contains "Connected" "$output"
+  assert_output_contains "SUCCESS: Reachable. Can ship metrics to Elastic Cloud." "$output"
   assert_output_not_contains "HTTP 200" "$output"
 }
 
@@ -793,7 +793,7 @@ test_debug_flag_otel_shows_http_code() {
 
   stop_mock_server
 
-  assert_output_contains "Connected (HTTP 200)" "$output"
+  assert_output_contains "Can ship metrics to Elastic Cloud. (HTTP 200)" "$output"
 }
 
 test_unknown_argument() {

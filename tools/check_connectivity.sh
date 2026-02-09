@@ -322,9 +322,9 @@ check_otel() {
   fi
 
   if [[ "$DEBUG" == "true" ]]; then
-    print_success "Connected (HTTP $http_code)"
+    print_success "SUCCESS: Reachable. Can ship metrics to Elastic Cloud. (HTTP $http_code)"
   else
-    print_success "Connected"
+    print_success "SUCCESS: Reachable. Can ship metrics to Elastic Cloud."
   fi
   ((CHECKS_PASSED++))
   return 0
