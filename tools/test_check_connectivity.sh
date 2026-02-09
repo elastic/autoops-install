@@ -280,8 +280,8 @@ test_proxy_detection_with_proxy() {
   assert_output_contains "HTTP_PROXY=" "$output"
   assert_output_contains "HTTPS_PROXY=" "$output"
   assert_output_contains "NO_PROXY=" "$output"
-  # Check that values are masked (contains ...)
-  assert_output_contains "\.\.\." "$output"
+  # Check that proxy values are displayed
+  assert_output_contains "myproxy.example.com" "$output"
 }
 
 test_cloud_api_success() {
@@ -455,7 +455,7 @@ test_elasticsearch_with_api_key() {
 
   stop_mock_server
 
-  assert_output_contains "Auth: ApiKey abcd...mnop" "$output"
+  assert_output_contains "Auth: ApiKey \*\*REDACTED\*\*" "$output"
 }
 
 test_elasticsearch_with_basic_auth() {
@@ -481,7 +481,7 @@ test_elasticsearch_with_basic_auth() {
 
   assert_output_contains "Auth: Basic elastic:" "$output"
   # Password should be masked
-  assert_output_contains "supe...word" "$output"
+  assert_output_contains "\*\*REDACTED\*\*" "$output"
 }
 
 test_elasticsearch_auth_failure_401() {
@@ -637,8 +637,8 @@ test_elasticsearch_license_active() {
   assert_output_not_contains "License status is" "$output"
 }
 
-test_value_masking_short() {
-  log_test "Value masking - short values fully masked"
+test_value_masking() {
+  log_test "Value masking - values are redacted"
 
   start_path_mock_server 2 \
     "/" 200 '{"cluster_name": "test", "version": {"number": "8.12.0"}}' \
@@ -657,8 +657,8 @@ test_value_masking_short() {
 
   stop_mock_server
 
-  # Short values (8 chars or less) should show ****
-  assert_output_contains 'Auth: ApiKey \*\*\*\*' "$output"
+  # Values should show **REDACTED**
+  assert_output_contains 'Auth: ApiKey \*\*REDACTED\*\*' "$output"
 }
 
 test_summary_all_pass() {
@@ -946,7 +946,7 @@ run_all_tests() {
   test_elasticsearch_version_exact_minimum
   test_elasticsearch_license_inactive
   test_elasticsearch_license_active
-  test_value_masking_short
+  test_value_masking
   test_summary_all_pass
   test_summary_some_fail
   test_curl_not_installed
