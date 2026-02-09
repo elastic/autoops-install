@@ -216,7 +216,7 @@ check_proxy() {
   done
 
   if [[ $proxy_found -eq 0 ]]; then
-    print_info "No proxy environment variables configured"
+    print_info "INFO: No proxy detected; using direct connection."
   else
     PROXY_CONFIGURED=true
   fi

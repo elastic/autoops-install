@@ -258,7 +258,7 @@ test_proxy_detection() {
     bash "$CHECK_SCRIPT" 2>&1
   ) || exit_code=$?
 
-  assert_output_contains "No proxy environment variables configured" "$output"
+  assert_output_contains "INFO: No proxy detected; using direct connection." "$output"
 }
 
 test_proxy_detection_with_proxy() {
