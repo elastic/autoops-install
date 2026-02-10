@@ -156,19 +156,19 @@ interpret_curl_error() {
   local error_output="$2"
 
   case "$exit_code" in
-    5)  echo "Could not resolve proxy host" ;;
-    6)  echo "DNS resolution failed" ;;
-    7)  echo "Connection refused" ;;
-    28) echo "Connection timeout" ;;
-    35) echo "SSL handshake failed" ;;
-    51) echo "SSL certificate verification failed (peer certificate)" ;;
-    60) echo "SSL certificate verification failed (CA certificate)" ;;
-    97) echo "HTTPS proxy handshake failed" ;;
+    5)  echo "Could not resolve proxy host." ;;
+    6)  echo "DNS resolution failed. Check your DNS/Name server settings." ;;
+    7)  echo "Connection refused." ;;
+    28) echo "Connection timeout. Check the firewall for Port 443." ;;
+    35) echo "SSL handshake failed. Check for SSL inspection/interception." ;;
+    51) echo "SSL certificate verification failed (peer certificate)." ;;
+    60) echo "SSL certificate verification failed (CA certificate)." ;;
+    97) echo "HTTPS proxy handshake failed." ;;
     *)
       if [[ -n "$error_output" ]]; then
-        echo "Connection failed: $error_output"
+        echo "Connection failed (curl exit code: $exit_code): $error_output"
       else
-        echo "Connection failed (curl exit code: $exit_code)"
+        echo "Connection failed (curl exit code: $exit_code)."
       fi
       ;;
   esac
