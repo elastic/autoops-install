@@ -65,10 +65,6 @@ print_section() {
   echo "--- $1 ---"
 }
 
-print_check() {
-  echo "  ℹ️  INFO: Checking $1..."
-}
-
 print_success() {
   echo "  ✅ SUCCESS: $1"
 }
@@ -78,15 +74,19 @@ print_warning() {
 }
 
 print_error() {
-  echo "  ❌ FAIL: $1"
+  echo "  ❌ FAIL:    $1"
 }
 
 print_info() {
-  echo "  ℹ️  INFO: $1"
+  echo "  ℹ️  INFO:    $1"
 }
 
 print_skipped() {
   echo "  ⚠️  SKIPPED: $1"
+}
+
+print_check() {
+  print_info "Checking $1..."
 }
 
 # Mask sensitive values in output (e.g. API keys, passwords)
