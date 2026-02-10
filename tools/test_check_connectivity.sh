@@ -258,7 +258,7 @@ test_proxy_detection() {
     bash "$CHECK_SCRIPT" 2>&1
   ) || exit_code=$?
 
-  assert_output_contains "INFO: No proxy detected; using direct connection." "$output"
+  assert_output_contains "ℹ️  INFO: No proxy detected; using direct connection." "$output"
 }
 
 test_proxy_detection_with_proxy() {
@@ -298,7 +298,7 @@ test_proxy_http_without_https() {
     bash "$CHECK_SCRIPT" 2>&1
   ) || exit_code=$?
 
-  assert_output_contains "WARNING: Proxy found, but HTTPS_PROXY is missing." "$output"
+  assert_output_contains "⚠️  WARNING: Proxy found, but HTTPS_PROXY is missing." "$output"
 }
 
 test_proxy_no_warning_when_https_set() {
@@ -335,7 +335,7 @@ test_cloud_api_success() {
 
   stop_mock_server
 
-  assert_output_contains "SUCCESS: Reachable. Can register to Elastic Cloud." "$output"
+  assert_output_contains "✅ SUCCESS: Reachable. Can register to Elastic Cloud." "$output"
   assert_output_not_contains "HTTP 200" "$output"
 }
 
@@ -352,7 +352,7 @@ test_cloud_api_connection_refused() {
   ) || exit_code=$?
 
   assert_exit_code 1 "$exit_code"
-  assert_output_contains "FAIL:" "$output"
+  assert_output_contains "❌ FAIL:" "$output"
 }
 
 test_otel_success() {
@@ -372,7 +372,7 @@ test_otel_success() {
   stop_mock_server
 
   assert_output_contains "OTel Endpoint" "$output"
-  assert_output_contains "SUCCESS: Reachable. Can ship metrics to Elastic Cloud." "$output"
+  assert_output_contains "✅ SUCCESS: Reachable. Can ship metrics to Elastic Cloud." "$output"
   assert_output_not_contains "HTTP 200" "$output"
 }
 
@@ -464,9 +464,9 @@ test_elasticsearch_success() {
 
   stop_mock_server
 
-  assert_output_contains "SUCCESS: Connected successfully (HTTP 200)" "$output"
-  assert_output_contains "INFO: Cluster: test-cluster" "$output"
-  assert_output_contains "INFO: Version: 8.12.0" "$output"
+  assert_output_contains "✅ SUCCESS: Connected successfully (HTTP 200)" "$output"
+  assert_output_contains "ℹ️  INFO: Cluster: test-cluster" "$output"
+  assert_output_contains "ℹ️  INFO: Version: 8.12.0" "$output"
   assert_output_contains "License: active (basic: test-uid-1234)" "$output"
 }
 
@@ -599,7 +599,7 @@ test_elasticsearch_version_too_old() {
   stop_mock_server
 
   assert_exit_code 1 "$exit_code"
-  assert_output_contains "INFO: Version: 7.16.3" "$output"
+  assert_output_contains "ℹ️  INFO: Version: 7.16.3" "$output"
   assert_output_contains "below the minimum required version 7.17.0" "$output"
 }
 
@@ -622,7 +622,7 @@ test_elasticsearch_version_exact_minimum() {
 
   stop_mock_server
 
-  assert_output_contains "INFO: Version: 7.17.0" "$output"
+  assert_output_contains "ℹ️  INFO: Version: 7.17.0" "$output"
   assert_output_not_contains "below the minimum" "$output"
 }
 
@@ -718,7 +718,7 @@ test_summary_all_pass() {
   stop_mock_server
 
   assert_exit_code 0 "$exit_code"
-  assert_output_contains "SUCCESS: All checks passed. The environment is ready to use AutoOps." "$output"
+  assert_output_contains "✅ SUCCESS: All checks passed. The environment is ready to use AutoOps." "$output"
 }
 
 test_summary_some_fail() {
@@ -734,7 +734,7 @@ test_summary_some_fail() {
   ) || exit_code=$?
 
   assert_exit_code 1 "$exit_code"
-  assert_output_contains "FAIL: Connectivity issues detected. AutoOps Agent will not function." "$output"
+  assert_output_contains "❌ FAIL: Connectivity issues detected. AutoOps Agent will not function." "$output"
 }
 
 test_curl_not_installed() {
@@ -827,7 +827,7 @@ test_elasticsearch_version_too_old() {
   stop_mock_server
 
   assert_exit_code 1 "$exit_code"
-  assert_output_contains "INFO: Version: 7.16.3" "$output"
+  assert_output_contains "ℹ️  INFO: Version: 7.16.3" "$output"
   assert_output_contains "below the minimum required version 7.17.0" "$output"
 }
 
@@ -850,7 +850,7 @@ test_elasticsearch_version_exact_minimum() {
 
   stop_mock_server
 
-  assert_output_contains "INFO: Version: 7.17.0" "$output"
+  assert_output_contains "ℹ️  INFO: Version: 7.17.0" "$output"
   assert_output_not_contains "below the minimum" "$output"
 }
 

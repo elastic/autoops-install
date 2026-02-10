@@ -24,7 +24,7 @@
 # ---------------------------
 
 if ! command -v curl &> /dev/null; then
-  echo "FAIL: 'curl' is required but not installed."
+  echo "❌ FAIL: 'curl' is required but not installed."
   exit 1
 fi
 
@@ -66,27 +66,27 @@ print_section() {
 }
 
 print_check() {
-  echo "  INFO: Checking $1..."
+  echo "  ℹ️  INFO: Checking $1..."
 }
 
 print_success() {
-  echo "  SUCCESS: $1"
+  echo "  ✅ SUCCESS: $1"
 }
 
 print_warning() {
-  echo "  WARNING: $1"
+  echo "  ⚠️  WARNING: $1"
 }
 
 print_error() {
-  echo "  FAIL: $1"
+  echo "  ❌ FAIL: $1"
 }
 
 print_info() {
-  echo "  INFO: $1"
+  echo "  ℹ️  INFO: $1"
 }
 
 print_skipping() {
-  echo "  SKIP: $1"
+  echo "  ⚠️  SKIP: $1"
 }
 
 # Mask sensitive values in output (e.g. API keys, passwords)
