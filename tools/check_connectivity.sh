@@ -85,8 +85,8 @@ print_info() {
   echo "  ℹ️  INFO: $1"
 }
 
-print_skipping() {
-  echo "  ⚠️  SKIP: $1"
+print_skipped() {
+  echo "  ⚠️  SKIPPED: $1"
 }
 
 # Mask sensitive values in output (e.g. API keys, passwords)
@@ -342,7 +342,7 @@ check_elasticsearch() {
   print_section "Elasticsearch"
 
   if [[ -z "${AUTOOPS_ES_URL:-}" ]]; then
-    print_skipping "Elasticsearch check skipped (AUTOOPS_ES_URL not set). Set AUTOOPS_ES_URL to enable connectivity testing"
+    print_skipped "Elasticsearch check skipped (AUTOOPS_ES_URL not set). Set AUTOOPS_ES_URL to enable connectivity testing"
     ((CHECKS_SKIPPED++))
     return 0
   fi
@@ -569,6 +569,10 @@ print_summary() {
   if [[ $CHECKS_FAILED -gt 0 ]]; then
     print_error "Connectivity issues detected. AutoOps Agent will not function. Review troubleshooting guide and address issues before running the agent."
     return 1
+  elif [[ $CHECKS_SKIPPED -gt 0 ]]; then
+    print_success "Elastic Cloud connectivity checks passed."
+    print_skipped "The Elasticsearch environment was not checked."
+    return 2
   else
     print_success "All checks passed. The environment is ready to use AutoOps."
     return 0

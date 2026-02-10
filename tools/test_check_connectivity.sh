@@ -737,6 +737,30 @@ test_summary_some_fail() {
   assert_output_contains "❌ FAIL: Connectivity issues detected. AutoOps Agent will not function." "$output"
 }
 
+test_summary_skipped() {
+  log_test "Summary - checks pass with ES skipped"
+
+  start_path_mock_server 2 \
+    "/api/v1/cloud-connected/clusters" 200 '{"ok": true}' \
+    "/v1/logs" 200 '{"ok": true}'
+
+  local output
+  local exit_code=0
+
+  output=$(
+    ELASTIC_CLOUD_CONNECTED_MODE_API_URL="${MOCK_SERVER_URL}" \
+    AUTOOPS_OTEL_URL="${MOCK_SERVER_URL}" \
+    bash "$CHECK_SCRIPT" 2>&1
+  ) || exit_code=$?
+
+  stop_mock_server
+
+  assert_exit_code 2 "$exit_code"
+  assert_output_contains "✅ SUCCESS: Elastic Cloud connectivity checks passed." "$output"
+  assert_output_contains "⚠️  SKIPPED: The Elasticsearch environment was not checked." "$output"
+  assert_output_contains "Skipped: 1" "$output"
+}
+
 test_curl_not_installed() {
   log_test "Dependency check - curl not installed"
 
@@ -985,6 +1009,7 @@ run_all_tests() {
   test_value_masking
   test_summary_all_pass
   test_summary_some_fail
+  test_summary_skipped
   test_curl_not_installed
   test_debug_flag_shows_http_code
   test_debug_flag_otel_shows_http_code
