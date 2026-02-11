@@ -567,7 +567,10 @@ print_summary() {
   echo ""
 
   if [[ $CHECKS_FAILED -gt 0 ]]; then
-    print_error "Connectivity issues detected. AutoOps Agent will not function. Review troubleshooting guide and address issues before running the agent."
+    print_error "Connectivity issues detected. AutoOps Agent will not function."
+    echo ""
+    echo "  Review the troubleshooting guide and address issues before running the agent:"
+    echo "  https://www.elastic.co/docs/deploy-manage/monitor/autoops/cc-cloud-connect-autoops-troubleshooting"
     return 1
   elif [[ $CHECKS_SKIPPED -gt 0 ]]; then
     print_success "Elastic Cloud connectivity checks passed."

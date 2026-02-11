@@ -735,6 +735,8 @@ test_summary_some_fail() {
 
   assert_exit_code 1 "$exit_code"
   assert_output_contains "❌ FAIL:    Connectivity issues detected. AutoOps Agent will not function." "$output"
+  assert_output_contains "troubleshooting guide" "$output"
+  assert_output_contains "elastic.co/docs/deploy-manage/monitor/autoops/cc-cloud-connect-autoops-troubleshooting" "$output"
 }
 
 test_summary_skipped() {
