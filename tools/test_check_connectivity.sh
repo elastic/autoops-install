@@ -258,7 +258,7 @@ test_proxy_detection() {
     bash "$CHECK_SCRIPT" 2>&1
   ) || exit_code=$?
 
-  assert_output_contains "No proxy environment variables configured" "$output"
+  assert_output_contains "ℹ️  INFO:    No proxy detected; using direct connection." "$output"
 }
 
 test_proxy_detection_with_proxy() {
@@ -284,6 +284,41 @@ test_proxy_detection_with_proxy() {
   assert_output_contains "myproxy.example.com" "$output"
 }
 
+test_proxy_http_without_https() {
+  log_test "Proxy detection - HTTP_PROXY set without HTTPS_PROXY"
+
+  local output
+  local exit_code=0
+
+  output=$(
+    unset http_proxy https_proxy HTTPS_PROXY no_proxy NO_PROXY all_proxy ALL_PROXY
+    HTTP_PROXY="http://myproxy.example.com:8080" \
+    ELASTIC_CLOUD_CONNECTED_MODE_API_URL="http://127.0.0.1:1" \
+    AUTOOPS_OTEL_URL="http://127.0.0.1:1" \
+    bash "$CHECK_SCRIPT" 2>&1
+  ) || exit_code=$?
+
+  assert_output_contains "⚠️  WARNING: Proxy found, but HTTPS_PROXY is missing." "$output"
+}
+
+test_proxy_no_warning_when_https_set() {
+  log_test "Proxy detection - no warning when HTTPS_PROXY is set"
+
+  local output
+  local exit_code=0
+
+  output=$(
+    unset http_proxy https_proxy no_proxy all_proxy
+    HTTP_PROXY="http://myproxy.example.com:8080" \
+    HTTPS_PROXY="http://secureproxy.example.com:8443" \
+    ELASTIC_CLOUD_CONNECTED_MODE_API_URL="http://127.0.0.1:1" \
+    AUTOOPS_OTEL_URL="http://127.0.0.1:1" \
+    bash "$CHECK_SCRIPT" 2>&1
+  ) || exit_code=$?
+
+  assert_output_not_contains "HTTPS_PROXY is missing" "$output"
+}
+
 test_cloud_api_success() {
   log_test "Cloud API - successful connection"
 
@@ -300,7 +335,7 @@ test_cloud_api_success() {
 
   stop_mock_server
 
-  assert_output_contains "Connected" "$output"
+  assert_output_contains "✅ SUCCESS: Reachable. Can register to Elastic Cloud." "$output"
   assert_output_not_contains "HTTP 200" "$output"
 }
 
@@ -317,7 +352,7 @@ test_cloud_api_connection_refused() {
   ) || exit_code=$?
 
   assert_exit_code 1 "$exit_code"
-  assert_output_contains "Connection failed" "$output"
+  assert_output_contains "❌ FAIL:" "$output"
 }
 
 test_otel_success() {
@@ -337,7 +372,7 @@ test_otel_success() {
   stop_mock_server
 
   assert_output_contains "OTel Endpoint" "$output"
-  assert_output_contains "Connected" "$output"
+  assert_output_contains "✅ SUCCESS: Reachable. Can ship metrics to Elastic Cloud." "$output"
   assert_output_not_contains "HTTP 200" "$output"
 }
 
@@ -429,9 +464,9 @@ test_elasticsearch_success() {
 
   stop_mock_server
 
-  assert_output_contains "Connected successfully (HTTP 200)" "$output"
-  assert_output_contains "Cluster: test-cluster" "$output"
-  assert_output_contains "Version: 8.12.0" "$output"
+  assert_output_contains "✅ SUCCESS: Connected successfully (HTTP 200)" "$output"
+  assert_output_contains "ℹ️  INFO:    Cluster: test-cluster" "$output"
+  assert_output_contains "ℹ️  INFO:    Version: 8.12.0" "$output"
   assert_output_contains "License: active (basic: test-uid-1234)" "$output"
 }
 
@@ -503,7 +538,7 @@ test_elasticsearch_auth_failure_401() {
   stop_mock_server
 
   assert_exit_code 1 "$exit_code"
-  assert_output_contains "Authentication failed (HTTP 401 Unauthorized)" "$output"
+  assert_output_contains "Authentication failed (HTTP 401 Unauthorized). Check for typos." "$output"
 }
 
 test_elasticsearch_auth_failure_403() {
@@ -564,7 +599,7 @@ test_elasticsearch_version_too_old() {
   stop_mock_server
 
   assert_exit_code 1 "$exit_code"
-  assert_output_contains "Version: 7.16.3" "$output"
+  assert_output_contains "ℹ️  INFO:    Version: 7.16.3" "$output"
   assert_output_contains "below the minimum required version 7.17.0" "$output"
 }
 
@@ -587,7 +622,7 @@ test_elasticsearch_version_exact_minimum() {
 
   stop_mock_server
 
-  assert_output_contains "Version: 7.17.0" "$output"
+  assert_output_contains "ℹ️  INFO:    Version: 7.17.0" "$output"
   assert_output_not_contains "below the minimum" "$output"
 }
 
@@ -683,7 +718,7 @@ test_summary_all_pass() {
   stop_mock_server
 
   assert_exit_code 0 "$exit_code"
-  assert_output_contains "Result: All checks passed" "$output"
+  assert_output_contains "✅ SUCCESS: All checks passed. The environment is ready to use AutoOps." "$output"
 }
 
 test_summary_some_fail() {
@@ -699,7 +734,33 @@ test_summary_some_fail() {
   ) || exit_code=$?
 
   assert_exit_code 1 "$exit_code"
-  assert_output_contains "Result: Some checks failed" "$output"
+  assert_output_contains "❌ FAIL:    Connectivity issues detected. AutoOps Agent will not function." "$output"
+  assert_output_contains "troubleshooting guide" "$output"
+  assert_output_contains "elastic.co/docs/deploy-manage/monitor/autoops/cc-cloud-connect-autoops-troubleshooting" "$output"
+}
+
+test_summary_skipped() {
+  log_test "Summary - checks pass with ES skipped"
+
+  start_path_mock_server 2 \
+    "/api/v1/cloud-connected/clusters" 200 '{"ok": true}' \
+    "/v1/logs" 200 '{"ok": true}'
+
+  local output
+  local exit_code=0
+
+  output=$(
+    ELASTIC_CLOUD_CONNECTED_MODE_API_URL="${MOCK_SERVER_URL}" \
+    AUTOOPS_OTEL_URL="${MOCK_SERVER_URL}" \
+    bash "$CHECK_SCRIPT" 2>&1
+  ) || exit_code=$?
+
+  stop_mock_server
+
+  assert_exit_code 2 "$exit_code"
+  assert_output_contains "✅ SUCCESS: Elastic Cloud connectivity checks passed." "$output"
+  assert_output_contains "⚠️  SKIPPED: The Elasticsearch environment was not checked." "$output"
+  assert_output_contains "Skipped: 1" "$output"
 }
 
 test_curl_not_installed() {
@@ -720,8 +781,7 @@ test_curl_not_installed() {
   rm -rf "${temp_bin}"
 
   assert_exit_code 1 "$exit_code"
-  assert_output_contains "curl" "$output"
-  assert_output_contains "required" "$output"
+  assert_output_contains "FAIL: 'curl' is required but not installed." "$output"
 }
 
 test_debug_flag_shows_http_code() {
@@ -740,7 +800,7 @@ test_debug_flag_shows_http_code() {
 
   stop_mock_server
 
-  assert_output_contains "Connected (HTTP 200)" "$output"
+  assert_output_contains "Can register to Elastic Cloud. (HTTP 200)" "$output"
 }
 
 test_debug_flag_otel_shows_http_code() {
@@ -759,7 +819,7 @@ test_debug_flag_otel_shows_http_code() {
 
   stop_mock_server
 
-  assert_output_contains "Connected (HTTP 200)" "$output"
+  assert_output_contains "Can ship metrics to Elastic Cloud. (HTTP 200)" "$output"
 }
 
 test_unknown_argument() {
@@ -793,7 +853,7 @@ test_elasticsearch_version_too_old() {
   stop_mock_server
 
   assert_exit_code 1 "$exit_code"
-  assert_output_contains "Version: 7.16.3" "$output"
+  assert_output_contains "ℹ️  INFO:    Version: 7.16.3" "$output"
   assert_output_contains "below the minimum required version 7.17.0" "$output"
 }
 
@@ -816,7 +876,7 @@ test_elasticsearch_version_exact_minimum() {
 
   stop_mock_server
 
-  assert_output_contains "Version: 7.17.0" "$output"
+  assert_output_contains "ℹ️  INFO:    Version: 7.17.0" "$output"
   assert_output_not_contains "below the minimum" "$output"
 }
 
@@ -929,6 +989,8 @@ run_all_tests() {
   # Run tests
   test_proxy_detection
   test_proxy_detection_with_proxy
+  test_proxy_http_without_https
+  test_proxy_no_warning_when_https_set
   test_cloud_api_success
   test_cloud_api_connection_refused
   test_otel_success
@@ -949,6 +1011,7 @@ run_all_tests() {
   test_value_masking
   test_summary_all_pass
   test_summary_some_fail
+  test_summary_skipped
   test_curl_not_installed
   test_debug_flag_shows_http_code
   test_debug_flag_otel_shows_http_code

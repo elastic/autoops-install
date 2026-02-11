@@ -24,7 +24,7 @@
 # ---------------------------
 
 if ! command -v curl &> /dev/null; then
-  echo "Error: 'curl' is required but not installed"
+  echo "❌ FAIL: 'curl' is required but not installed."
   exit 1
 fi
 
@@ -65,24 +65,28 @@ print_section() {
   echo "--- $1 ---"
 }
 
-print_check() {
-  echo "  Checking $1..."
-}
-
 print_success() {
-  echo "  $1"
+  echo "  ✅ SUCCESS: $1"
 }
 
 print_warning() {
-  echo "  $1"
+  echo "  ⚠️  WARNING: $1"
 }
 
 print_error() {
-  echo "  $1"
+  echo "  ❌ FAIL:    $1"
 }
 
 print_info() {
-  echo "  $1"
+  echo "  ℹ️  INFO:    $1"
+}
+
+print_skipped() {
+  echo "  ⚠️  SKIPPED: $1"
+}
+
+print_check() {
+  print_info "Checking $1..."
 }
 
 # Mask sensitive values in output (e.g. API keys, passwords)
@@ -152,19 +156,19 @@ interpret_curl_error() {
   local error_output="$2"
 
   case "$exit_code" in
-    5)  echo "Could not resolve proxy host" ;;
-    6)  echo "DNS resolution failed" ;;
-    7)  echo "Connection refused" ;;
-    28) echo "Connection timeout" ;;
-    35) echo "SSL handshake failed" ;;
-    51) echo "SSL certificate verification failed (peer certificate)" ;;
-    60) echo "SSL certificate verification failed (CA certificate)" ;;
-    97) echo "HTTPS proxy handshake failed" ;;
+    5)  echo "Could not resolve proxy host." ;;
+    6)  echo "DNS resolution failed. Check your DNS/Name server settings." ;;
+    7)  echo "Connection refused." ;;
+    28) echo "Connection timeout. Check the firewall for Port 443." ;;
+    35) echo "SSL handshake failed. Check for SSL inspection/interception." ;;
+    51) echo "SSL certificate verification failed (peer certificate)." ;;
+    60) echo "SSL certificate verification failed (CA certificate)." ;;
+    97) echo "HTTPS proxy handshake failed." ;;
     *)
       if [[ -n "$error_output" ]]; then
-        echo "Connection failed: $error_output"
+        echo "Connection failed (curl exit code: $exit_code): $error_output"
       else
-        echo "Connection failed (curl exit code: $exit_code)"
+        echo "Connection failed (curl exit code: $exit_code)."
       fi
       ;;
   esac
@@ -216,9 +220,14 @@ check_proxy() {
   done
 
   if [[ $proxy_found -eq 0 ]]; then
-    print_info "No proxy environment variables configured"
+    print_info "No proxy detected; using direct connection."
   else
     PROXY_CONFIGURED=true
+
+    # Warn if HTTP proxy is set but HTTPS proxy is missing
+    if [[ -n "${HTTP_PROXY:-}${http_proxy:-}" && -z "${HTTPS_PROXY:-}" && -z "${https_proxy:-}" ]]; then
+      print_warning "Proxy found, but HTTPS_PROXY is missing."
+    fi
   fi
 }
 
@@ -256,7 +265,7 @@ check_cloud_api() {
   if [[ $curl_exit -ne 0 ]]; then
     local error_msg
     error_msg=$(interpret_curl_error "$curl_exit" "$(cat "${ERROR_FILE}" 2>/dev/null)")
-    print_error "Connection failed: $error_msg"
+    print_error "$error_msg"
     if [[ "$PROXY_CONFIGURED" == "true" && "$curl_exit" != "5" && "$curl_exit" != "97" ]]; then
       print_warning "A proxy is configured — this may be causing the connection failure"
     fi
@@ -266,9 +275,9 @@ check_cloud_api() {
 
   # Any HTTP response means connectivity works (even 4xx/5xx)
   if [[ "$DEBUG" == "true" ]]; then
-    print_success "Connected (HTTP $http_code)"
+    print_success "Reachable. Can register to Elastic Cloud. (HTTP $http_code)"
   else
-    print_success "Connected"
+    print_success "Reachable. Can register to Elastic Cloud."
   fi
   ((CHECKS_PASSED++))
   return 0
@@ -308,7 +317,7 @@ check_otel() {
   if [[ $curl_exit -ne 0 ]]; then
     local error_msg
     error_msg=$(interpret_curl_error "$curl_exit" "$(cat "${ERROR_FILE}" 2>/dev/null)")
-    print_error "Connection failed: $error_msg"
+    print_error "$error_msg"
     if [[ "$PROXY_CONFIGURED" == "true" && "$curl_exit" != "5" && "$curl_exit" != "97" ]]; then
       print_warning "A proxy is configured — this may be causing the connection failure"
     fi
@@ -317,9 +326,9 @@ check_otel() {
   fi
 
   if [[ "$DEBUG" == "true" ]]; then
-    print_success "Connected (HTTP $http_code)"
+    print_success "Reachable. Can ship metrics to Elastic Cloud. (HTTP $http_code)"
   else
-    print_success "Connected"
+    print_success "Reachable. Can ship metrics to Elastic Cloud."
   fi
   ((CHECKS_PASSED++))
   return 0
@@ -333,8 +342,7 @@ check_elasticsearch() {
   print_section "Elasticsearch"
 
   if [[ -z "${AUTOOPS_ES_URL:-}" ]]; then
-    print_info "Elasticsearch check skipped (AUTOOPS_ES_URL not set)"
-    print_info "Set AUTOOPS_ES_URL to enable connectivity testing"
+    print_skipped "Elasticsearch check skipped (AUTOOPS_ES_URL not set). Set AUTOOPS_ES_URL to enable connectivity testing"
     ((CHECKS_SKIPPED++))
     return 0
   fi
@@ -368,7 +376,7 @@ check_elasticsearch() {
     print_info "CA: ${AUTOOPS_ES_CA}"
 
     if [[ ! -f "${AUTOOPS_ES_CA}" ]]; then
-      print_error "CA certificate file not found: ${AUTOOPS_ES_CA}"
+      print_error "CA certificate file not found: ${AUTOOPS_ES_CA}."
       ((CHECKS_FAILED++))
       return 1
     fi
@@ -391,7 +399,7 @@ check_elasticsearch() {
 
     # If connection succeeded without CA, warn the user
     if [[ $test_curl_exit -eq 0 ]]; then
-      ca_warning="CA certificate may not be required (connection succeeded without it)"
+      ca_warning="Connection secure without provided CA file."
     fi
 
     ca_opts=(--cacert "${AUTOOPS_ES_CA}")
@@ -417,7 +425,7 @@ check_elasticsearch() {
   if [[ $curl_exit -ne 0 ]]; then
     local error_msg
     error_msg=$(interpret_curl_error "$curl_exit" "$(cat "${ERROR_FILE}" 2>/dev/null)")
-    print_error "Connection failed: $error_msg"
+    print_error "$error_msg"
     if [[ "$PROXY_CONFIGURED" == "true" && "$curl_exit" != "5" && "$curl_exit" != "97" ]]; then
       print_warning "A proxy is configured — this may be causing the connection failure"
     fi
@@ -519,12 +527,12 @@ check_elasticsearch() {
       return 0
       ;;
     401)
-      print_error "Authentication failed (HTTP 401 Unauthorized)"
+      print_error "Authentication failed (HTTP 401 Unauthorized). Check for typos."
       ((CHECKS_FAILED++))
       return 1
       ;;
     403)
-      print_error "Authorization denied (HTTP 403 Forbidden)"
+      print_error "Authorization denied (HTTP 403 Forbidden)."
       ((CHECKS_FAILED++))
       return 1
       ;;
@@ -559,10 +567,17 @@ print_summary() {
   echo ""
 
   if [[ $CHECKS_FAILED -gt 0 ]]; then
-    echo "  Result: Some checks failed"
+    print_error "Connectivity issues detected. AutoOps Agent will not function."
+    echo ""
+    echo "  Review the troubleshooting guide and address issues before running the agent:"
+    echo "  https://www.elastic.co/docs/deploy-manage/monitor/autoops/cc-cloud-connect-autoops-troubleshooting"
     return 1
+  elif [[ $CHECKS_SKIPPED -gt 0 ]]; then
+    print_success "Elastic Cloud connectivity checks passed."
+    print_skipped "The Elasticsearch environment was not checked."
+    return 2
   else
-    echo "  Result: All checks passed"
+    print_success "All checks passed. The environment is ready to use AutoOps."
     return 0
   fi
 }
