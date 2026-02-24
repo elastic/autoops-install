@@ -493,6 +493,32 @@ test_elasticsearch_with_api_key() {
   assert_output_contains "Auth: ApiKey \*\*REDACTED\*\*" "$output"
 }
 
+test_elasticsearch_api_key_with_colon() {
+  log_test "Elasticsearch - API key with colon is base64 encoded"
+
+  start_path_mock_server 4 \
+    "/api/v1/cloud-connected/clusters" 200 '{"ok": true}' \
+    "/v1/logs" 200 '{"ok": true}' \
+    "/" 200 '{"cluster_name": "test-cluster", "version": {"number": "8.12.0"}}' \
+    "/_license" 200 '{"license": {"status": "active", "type": "basic", "uid": "test-uid-1234"}}'
+
+  local output
+  local exit_code=0
+
+  output=$(
+    ELASTIC_CLOUD_CONNECTED_MODE_API_URL="${MOCK_SERVER_URL}" \
+    AUTOOPS_OTEL_URL="${MOCK_SERVER_URL}" \
+    AUTOOPS_ES_URL="${MOCK_SERVER_URL}" \
+    AUTOOPS_ES_API_KEY="myid:myapikey" \
+    bash "$CHECK_SCRIPT" 2>&1
+  ) || exit_code=$?
+
+  stop_mock_server
+
+  assert_exit_code 0 "$exit_code"
+  assert_output_contains "Auth: ApiKey \*\*REDACTED\*\*" "$output"
+}
+
 test_elasticsearch_with_basic_auth() {
   log_test "Elasticsearch - Basic authentication display"
 
@@ -1000,6 +1026,7 @@ run_all_tests() {
   test_elasticsearch_skipped
   test_elasticsearch_success
   test_elasticsearch_with_api_key
+  test_elasticsearch_api_key_with_colon
   test_elasticsearch_with_basic_auth
   test_elasticsearch_auth_failure_401
   test_elasticsearch_auth_failure_403
