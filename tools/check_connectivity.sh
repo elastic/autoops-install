@@ -154,12 +154,17 @@ version_at_least() {
 interpret_curl_error() {
   local exit_code="$1"
   local error_output="$2"
+  local url="${3:-}"
 
   case "$exit_code" in
     5)  echo "Could not resolve proxy host." ;;
     6)  echo "DNS resolution failed. Check your DNS/Name server settings." ;;
     7)  echo "Connection refused. Check the server and port." ;;
-    28) echo "Connection timeout. Check the firewall for Port 443." ;;
+    28)
+      local port
+      port=$(extract_port_from_url "$url")
+      echo "Connection timeout. Check the firewall for Port ${port}."
+      ;;
     35) echo "SSL handshake failed. Check for SSL inspection/interception." ;;
     51) echo "SSL certificate verification failed (peer certificate)." ;;
     60) echo "SSL certificate verification failed (CA certificate)." ;;
@@ -172,6 +177,21 @@ interpret_curl_error() {
       fi
       ;;
   esac
+}
+
+extract_port_from_url() {
+  local url="$1"
+  local scheme="${url%%://*}"
+  local rest="${url#*://}"
+  local host_port="${rest%%/*}"   # strip path, leaving host[:port]
+
+  if [[ "$host_port" == *:* ]]; then
+    echo "${host_port##*:}"       # explicit port present
+  elif [[ "$scheme" == "https" ]]; then
+    echo "443"
+  else
+    echo "80"
+  fi
 }
 
 # ---------------------------
@@ -264,7 +284,7 @@ check_cloud_api() {
 
   if [[ $curl_exit -ne 0 ]]; then
     local error_msg
-    error_msg=$(interpret_curl_error "$curl_exit" "$(cat "${ERROR_FILE}" 2>/dev/null)")
+    error_msg=$(interpret_curl_error "$curl_exit" "$(cat "${ERROR_FILE}" 2>/dev/null)" "$check_url")
     print_error "$error_msg"
     if [[ "$PROXY_CONFIGURED" == "true" && "$curl_exit" != "5" && "$curl_exit" != "97" ]]; then
       print_warning "A proxy is configured — this may be causing the connection failure"
@@ -316,7 +336,7 @@ check_otel() {
 
   if [[ $curl_exit -ne 0 ]]; then
     local error_msg
-    error_msg=$(interpret_curl_error "$curl_exit" "$(cat "${ERROR_FILE}" 2>/dev/null)")
+    error_msg=$(interpret_curl_error "$curl_exit" "$(cat "${ERROR_FILE}" 2>/dev/null)" "$check_url")
     print_error "$error_msg"
     if [[ "$PROXY_CONFIGURED" == "true" && "$curl_exit" != "5" && "$curl_exit" != "97" ]]; then
       print_warning "A proxy is configured — this may be causing the connection failure"
@@ -430,7 +450,7 @@ check_elasticsearch() {
   # Handle curl errors
   if [[ $curl_exit -ne 0 ]]; then
     local error_msg
-    error_msg=$(interpret_curl_error "$curl_exit" "$(cat "${ERROR_FILE}" 2>/dev/null)")
+    error_msg=$(interpret_curl_error "$curl_exit" "$(cat "${ERROR_FILE}" 2>/dev/null)" "$es_url")
     print_error "$error_msg"
     if [[ "$PROXY_CONFIGURED" == "true" && "$curl_exit" != "5" && "$curl_exit" != "97" ]]; then
       print_warning "A proxy is configured — this may be causing the connection failure"
@@ -483,7 +503,7 @@ check_elasticsearch() {
 
         if [[ $license_curl_exit -ne 0 ]]; then
           local error_msg
-          error_msg=$(interpret_curl_error "$license_curl_exit" "$(cat "${ERROR_FILE}" 2>/dev/null)")
+          error_msg=$(interpret_curl_error "$license_curl_exit" "$(cat "${ERROR_FILE}" 2>/dev/null)" "$license_url")
           print_error "License check failed: $error_msg"
           if [[ "$PROXY_CONFIGURED" == "true" && "$license_curl_exit" != "5" && "$license_curl_exit" != "97" ]]; then
             print_warning "A proxy is configured — this may be causing the connection failure"
