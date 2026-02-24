@@ -159,7 +159,7 @@ interpret_curl_error() {
   case "$exit_code" in
     5)  echo "Could not resolve proxy host." ;;
     6)  echo "DNS resolution failed. Check your DNS/Name server settings." ;;
-    7)  echo "Connection refused." ;;
+    7)  echo "Connection refused. Check the server and port." ;;
     28)
       local port
       port=$(extract_port_from_url "$url")
