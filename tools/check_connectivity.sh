@@ -357,7 +357,13 @@ check_elasticsearch() {
   local auth_type="none"
 
   if [[ -n "${AUTOOPS_ES_API_KEY:-}" ]]; then
-    auth_opts=(-H "Authorization: ApiKey ${AUTOOPS_ES_API_KEY}")
+    local encoded_api_key
+    if [[ "${AUTOOPS_ES_API_KEY}" == *:* ]]; then
+      encoded_api_key=$(printf '%s' "${AUTOOPS_ES_API_KEY}" | base64 | tr -d '\n')
+    else
+      encoded_api_key="${AUTOOPS_ES_API_KEY}"
+    fi
+    auth_opts=(-H "Authorization: ApiKey ${encoded_api_key}")
     auth_type="ApiKey"
     print_info "Auth: ApiKey $(mask_value "${AUTOOPS_ES_API_KEY}")"
   elif [[ -n "${AUTOOPS_ES_USERNAME:-}" && -n "${AUTOOPS_ES_PASSWORD:-}" ]]; then
