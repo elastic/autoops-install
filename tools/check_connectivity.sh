@@ -158,7 +158,7 @@ interpret_curl_error() {
   case "$exit_code" in
     5)  echo "Could not resolve proxy host." ;;
     6)  echo "DNS resolution failed. Check your DNS/Name server settings." ;;
-    7)  echo "Connection refused." ;;
+    7)  echo "Connection refused. Check the server and port." ;;
     28) echo "Connection timeout. Check the firewall for Port 443." ;;
     35) echo "SSL handshake failed. Check for SSL inspection/interception." ;;
     51) echo "SSL certificate verification failed (peer certificate)." ;;
