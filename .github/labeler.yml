@@ -1,0 +1,22 @@
+# This file is used by .github/workflows/pr-labeler.yml and its format depends on the version used there
+# https://github.com/actions/labeler#pull-request-labeler
+
+':diagnostics':
+  - changed-files:
+    - any-glob-to-any-file: tools/**
+
+':installer':
+  - changed-files:
+      - any-glob-to-any-file: [k8s/**, linux/**]
+
+':kubernetes':
+  - changed-files:
+      - any-glob-to-any-file: k8s/**
+
+':linux':
+  - changed-files:
+      - any-glob-to-any-file: linux/**
+
+':tests':
+  - changed-files:
+    - any-glob-to-any-file: tools/test_*
