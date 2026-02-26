@@ -296,11 +296,26 @@ check_cloud_api() {
     return 1
   fi
 
-  # Any HTTP response means connectivity works (even 4xx/5xx)
-  if [[ "$DEBUG" == "true" ]]; then
-    print_success "Reachable. Can register to Elastic Cloud. (HTTP $http_code)"
+  if [[ -n "$api_key" && -n "$ES_CLUSTER_NAME" ]]; then
+    # Payload was sent — validate registration succeeded
+    if [[ "$http_code" == "200" || "$http_code" == "201" ]]; then
+      if [[ "$DEBUG" == "true" ]]; then
+        print_success "Reachable. Can register to Elastic Cloud. (HTTP $http_code)"
+      else
+        print_success "Reachable. Can register to Elastic Cloud."
+      fi
+    else
+      print_error "Registration failed (HTTP $http_code)."
+      ((CHECKS_FAILED++))
+      return 1
+    fi
   else
-    print_success "Reachable. Can register to Elastic Cloud."
+    # Any HTTP response means connectivity works (even 4xx/5xx)
+    if [[ "$DEBUG" == "true" ]]; then
+      print_success "Reachable. Can register to Elastic Cloud. (HTTP $http_code)"
+    else
+      print_success "Reachable. Can register to Elastic Cloud."
+    fi
   fi
   ((CHECKS_PASSED++))
   return 0

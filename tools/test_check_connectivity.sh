@@ -381,6 +381,31 @@ test_cloud_api_with_es_payload() {
   assert_output_contains "✅ SUCCESS: Reachable. Can register to Elastic Cloud." "$output"
 }
 
+test_cloud_api_with_es_payload_rejected() {
+  log_test "Cloud API - registration fails on non-200/201 response"
+
+  start_path_mock_server 3 \
+    "/" 200 '{"cluster_name": "test-cluster", "cluster_uuid": "test-uuid-abcd", "version": {"number": "8.12.0"}}' \
+    "/_license" 200 '{"license": {"status": "active", "type": "basic", "uid": "test-uid-1234"}}' \
+    "/api/v1/cloud-connected/clusters" 403 '{"error": "Forbidden"}'
+
+  local output
+  local exit_code=0
+
+  output=$(
+    ELASTIC_CLOUD_CONNECTED_MODE_API_URL="${MOCK_SERVER_URL}" \
+    AUTOOPS_OTEL_URL="http://127.0.0.1:1" \
+    AUTOOPS_ES_URL="${MOCK_SERVER_URL}" \
+    ELASTIC_CLOUD_CONNECTED_MODE_API_KEY="test-cloud-api-key" \
+    bash "$CHECK_SCRIPT" 2>&1
+  ) || exit_code=$?
+
+  stop_mock_server
+
+  assert_exit_code 1 "$exit_code"
+  assert_output_contains "❌ FAIL:    Registration failed (HTTP 403)." "$output"
+}
+
 test_otel_success() {
   log_test "OTel endpoint - successful connection"
 
@@ -1058,6 +1083,7 @@ run_all_tests() {
   test_cloud_api_success
   test_cloud_api_connection_refused
   test_cloud_api_with_es_payload
+  test_cloud_api_with_es_payload_rejected
   test_otel_success
   test_otel_default_url
   test_cloud_api_default_url
