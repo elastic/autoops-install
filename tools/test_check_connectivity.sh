@@ -355,6 +355,32 @@ test_cloud_api_connection_refused() {
   assert_output_contains "❌ FAIL:" "$output"
 }
 
+test_cloud_api_with_es_payload() {
+  log_test "Cloud API - POSTs ES cluster data when API key provided"
+
+  start_path_mock_server 4 \
+    "/" 200 '{"cluster_name": "test-cluster", "cluster_uuid": "test-uuid-abcd", "version": {"number": "8.12.0"}}' \
+    "/_license" 200 '{"license": {"status": "active", "type": "basic", "uid": "test-uid-1234"}}' \
+    "/api/v1/cloud-connected/clusters" 200 '{"ok": true}' \
+    "/v1/logs" 200 '{"ok": true}'
+
+  local output
+  local exit_code=0
+
+  output=$(
+    ELASTIC_CLOUD_CONNECTED_MODE_API_URL="${MOCK_SERVER_URL}" \
+    AUTOOPS_OTEL_URL="${MOCK_SERVER_URL}" \
+    AUTOOPS_ES_URL="${MOCK_SERVER_URL}" \
+    ELASTIC_CLOUD_CONNECTED_MODE_API_KEY="test-cloud-api-key" \
+    bash "$CHECK_SCRIPT" 2>&1
+  ) || exit_code=$?
+
+  stop_mock_server
+
+  assert_exit_code 0 "$exit_code"
+  assert_output_contains "✅ SUCCESS: Reachable. Can register to Elastic Cloud." "$output"
+}
+
 test_otel_success() {
   log_test "OTel endpoint - successful connection"
 
@@ -449,7 +475,7 @@ test_elasticsearch_success() {
   log_test "Elasticsearch - successful connection"
 
   start_path_mock_server 2 \
-    "/" 200 '{"cluster_name": "test-cluster", "version": {"number": "8.12.0"}}' \
+    "/" 200 '{"cluster_name": "test-cluster", "cluster_uuid": "test-uuid-abcd", "version": {"number": "8.12.0"}}' \
     "/_license" 200 '{"license": {"status": "active", "type": "basic", "uid": "test-uid-1234"}}'
 
   local output
@@ -465,7 +491,7 @@ test_elasticsearch_success() {
   stop_mock_server
 
   assert_output_contains "✅ SUCCESS: Connected successfully (HTTP 200)" "$output"
-  assert_output_contains "ℹ️  INFO:    Cluster: test-cluster" "$output"
+  assert_output_contains "ℹ️  INFO:    Cluster: test-cluster (test-uuid-abcd)" "$output"
   assert_output_contains "ℹ️  INFO:    Version: 8.12.0" "$output"
   assert_output_contains "License: active (basic: test-uid-1234)" "$output"
 }
@@ -474,7 +500,7 @@ test_elasticsearch_with_api_key() {
   log_test "Elasticsearch - API key authentication display"
 
   start_path_mock_server 2 \
-    "/" 200 '{"cluster_name": "test-cluster", "version": {"number": "8.12.0"}}' \
+    "/" 200 '{"cluster_name": "test-cluster", "cluster_uuid": "test-uuid-abcd", "version": {"number": "8.12.0"}}' \
     "/_license" 200 '{"license": {"status": "active", "type": "basic", "uid": "test-uid-1234"}}'
 
   local output
@@ -499,7 +525,7 @@ test_elasticsearch_api_key_with_colon() {
   start_path_mock_server 4 \
     "/api/v1/cloud-connected/clusters" 200 '{"ok": true}' \
     "/v1/logs" 200 '{"ok": true}' \
-    "/" 200 '{"cluster_name": "test-cluster", "version": {"number": "8.12.0"}}' \
+    "/" 200 '{"cluster_name": "test-cluster", "cluster_uuid": "test-uuid-abcd", "version": {"number": "8.12.0"}}' \
     "/_license" 200 '{"license": {"status": "active", "type": "basic", "uid": "test-uid-1234"}}'
 
   local output
@@ -523,7 +549,7 @@ test_elasticsearch_with_basic_auth() {
   log_test "Elasticsearch - Basic authentication display"
 
   start_path_mock_server 2 \
-    "/" 200 '{"cluster_name": "test-cluster", "version": {"number": "8.12.0"}}' \
+    "/" 200 '{"cluster_name": "test-cluster", "cluster_uuid": "test-uuid-abcd", "version": {"number": "8.12.0"}}' \
     "/_license" 200 '{"license": {"status": "active", "type": "basic", "uid": "test-uid-1234"}}'
 
   local output
@@ -656,7 +682,7 @@ test_elasticsearch_license_inactive() {
   log_test "Elasticsearch - license not active"
 
   start_path_mock_server 2 \
-    "/" 200 '{"cluster_name": "test-cluster", "version": {"number": "8.12.0"}}' \
+    "/" 200 '{"cluster_name": "test-cluster", "cluster_uuid": "test-uuid-abcd", "version": {"number": "8.12.0"}}' \
     "/_license" 200 '{"license": {"status": "expired"}}'
 
   local output
@@ -679,7 +705,7 @@ test_elasticsearch_license_active() {
   log_test "Elasticsearch - license active"
 
   start_path_mock_server 2 \
-    "/" 200 '{"cluster_name": "test-cluster", "version": {"number": "8.12.0"}}' \
+    "/" 200 '{"cluster_name": "test-cluster", "cluster_uuid": "test-uuid-abcd", "version": {"number": "8.12.0"}}' \
     "/_license" 200 '{"license": {"status": "active", "type": "basic", "uid": "test-uid-1234"}}'
 
   local output
@@ -910,7 +936,7 @@ test_elasticsearch_license_inactive() {
   log_test "Elasticsearch - license not active"
 
   start_path_mock_server 2 \
-    "/" 200 '{"cluster_name": "test-cluster", "version": {"number": "8.12.0"}}' \
+    "/" 200 '{"cluster_name": "test-cluster", "cluster_uuid": "test-uuid-abcd", "version": {"number": "8.12.0"}}' \
     "/_license" 200 '{"license": {"status": "expired"}}'
 
   local output
@@ -933,7 +959,7 @@ test_elasticsearch_license_active() {
   log_test "Elasticsearch - license active with type and uid"
 
   start_path_mock_server 2 \
-    "/" 200 '{"cluster_name": "test-cluster", "version": {"number": "8.12.0"}}' \
+    "/" 200 '{"cluster_name": "test-cluster", "cluster_uuid": "test-uuid-abcd", "version": {"number": "8.12.0"}}' \
     "/_license" 200 '{"license": {"status": "active", "type": "platinum", "uid": "abcd-1234-efgh"}}'
 
   local output
@@ -1031,6 +1057,7 @@ run_all_tests() {
   test_elasticsearch_license_active
   test_cloud_api_success
   test_cloud_api_connection_refused
+  test_cloud_api_with_es_payload
   test_otel_success
   test_otel_default_url
   test_cloud_api_default_url

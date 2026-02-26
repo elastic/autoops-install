@@ -120,6 +120,12 @@ CHECKS_SKIPPED=0
 CHECKS_WARNED=0
 PROXY_CONFIGURED=false
 
+ES_CLUSTER_ID=""
+ES_CLUSTER_NAME=""
+ES_VERSION=""
+ES_LICENSE_UID=""
+ES_LICENSE_TYPE=""
+
 # ---------------------------
 # Version comparison
 # ---------------------------
@@ -249,16 +255,33 @@ check_cloud_api() {
   print_info "URL: ${base_url}${using_default}"
   print_check "connectivity to ${check_url}"
 
+  local api_key="${ELASTIC_CLOUD_CONNECTED_MODE_API_KEY:-}"
   local http_code
   local curl_exit
 
-  http_code=$(curl -sS -X POST \
-    -H "Content-Length: 0" \
-    -w "%{http_code}" \
-    -o /dev/null \
-    --connect-timeout 10 \
-    --max-time 30 \
-    "${check_url}" 2>"${ERROR_FILE}") || curl_exit=$?
+  if [[ -n "$api_key" && -n "$ES_CLUSTER_NAME" ]]; then
+    local payload
+    payload=$(printf '{"self_managed_cluster":{"id":"%s","name":"%s","version":"%s"},"license":{"uid":"%s","type":"%s"}}' \
+      "$ES_CLUSTER_ID" "$ES_CLUSTER_NAME" "$ES_VERSION" "$ES_LICENSE_UID" "$ES_LICENSE_TYPE")
+
+    http_code=$(curl -sS -X POST \
+      -H "Content-Type: application/json" \
+      -H "Authorization: ApiKey ${api_key}" \
+      -d "$payload" \
+      -w "%{http_code}" \
+      -o /dev/null \
+      --connect-timeout 10 \
+      --max-time 30 \
+      "${check_url}" 2>"${ERROR_FILE}") || curl_exit=$?
+  else
+    http_code=$(curl -sS -X POST \
+      -H "Content-Length: 0" \
+      -w "%{http_code}" \
+      -o /dev/null \
+      --connect-timeout 10 \
+      --max-time 30 \
+      "${check_url}" 2>"${ERROR_FILE}") || curl_exit=$?
+  fi
 
   curl_exit=${curl_exit:-0}
 
@@ -447,12 +470,18 @@ check_elasticsearch() {
       # Try to extract cluster info from response
       if [[ -f "${RESPONSE_FILE}" ]]; then
         local cluster_name
+        local cluster_uuid
         local version
         cluster_name=$(grep -o '"cluster_name"[[:space:]]*:[[:space:]]*"[^"]*"' "${RESPONSE_FILE}" 2>/dev/null | head -1 | sed 's/.*:.*"\([^"]*\)".*/\1/')
+        cluster_uuid=$(grep -o '"cluster_uuid"[[:space:]]*:[[:space:]]*"[^"]*"' "${RESPONSE_FILE}" 2>/dev/null | head -1 | sed 's/.*:.*"\([^"]*\)".*/\1/')
         version=$(grep -o '"number"[[:space:]]*:[[:space:]]*"[^"]*"' "${RESPONSE_FILE}" 2>/dev/null | head -1 | sed 's/.*:.*"\([^"]*\)".*/\1/')
 
         if [[ -n "$cluster_name" ]]; then
-          print_info "Cluster: $cluster_name"
+          if [[ -n "$cluster_uuid" ]]; then
+            print_info "Cluster: $cluster_name ($cluster_uuid)"
+          else
+            print_info "Cluster: $cluster_name"
+          fi
         fi
         if [[ -n "$version" ]]; then
           print_info "Version: $version"
@@ -528,6 +557,12 @@ check_elasticsearch() {
         print_warning "$ca_warning"
         ((CHECKS_WARNED++))
       fi
+
+      ES_CLUSTER_ID="$cluster_uuid"
+      ES_CLUSTER_NAME="$cluster_name"
+      ES_VERSION="$version"
+      ES_LICENSE_UID="$license_uid"
+      ES_LICENSE_TYPE="$license_type"
 
       ((CHECKS_PASSED++))
       return 0
