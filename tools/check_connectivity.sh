@@ -596,9 +596,9 @@ main() {
   print_header
 
   check_proxy
+  check_elasticsearch
   check_cloud_api
   check_otel
-  check_elasticsearch
 
   print_summary
   exit $?

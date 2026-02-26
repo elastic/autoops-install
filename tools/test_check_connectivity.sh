@@ -1017,12 +1017,6 @@ run_all_tests() {
   test_proxy_detection_with_proxy
   test_proxy_http_without_https
   test_proxy_no_warning_when_https_set
-  test_cloud_api_success
-  test_cloud_api_connection_refused
-  test_otel_success
-  test_otel_default_url
-  test_cloud_api_default_url
-  test_no_default_indicator_when_custom_url
   test_elasticsearch_skipped
   test_elasticsearch_success
   test_elasticsearch_with_api_key
@@ -1035,6 +1029,12 @@ run_all_tests() {
   test_elasticsearch_version_exact_minimum
   test_elasticsearch_license_inactive
   test_elasticsearch_license_active
+  test_cloud_api_success
+  test_cloud_api_connection_refused
+  test_otel_success
+  test_otel_default_url
+  test_cloud_api_default_url
+  test_no_default_indicator_when_custom_url
   test_value_masking
   test_summary_all_pass
   test_summary_some_fail
