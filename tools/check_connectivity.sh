@@ -532,9 +532,9 @@ check_cloud_api() {
     # Payload was sent — validate registration succeeded
     if [[ "$http_code" == "200" || "$http_code" == "201" ]]; then
       if [[ "$DEBUG" == "true" ]]; then
-        print_success "Reachable. Can register to Elastic Cloud. (HTTP $http_code)"
+        print_success "Reachable. The cluster has been registered to Elastic Cloud. (HTTP $http_code)"
       else
-        print_success "Reachable. Can register to Elastic Cloud."
+        print_success "Reachable. The cluster has been registered to Elastic Cloud."
       fi
     else
       local error_detail=""

@@ -378,7 +378,7 @@ test_cloud_api_with_es_payload() {
   stop_mock_server
 
   assert_exit_code 0 "$exit_code"
-  assert_output_contains "✅ SUCCESS: Reachable. Can register to Elastic Cloud." "$output"
+  assert_output_contains "✅ SUCCESS: Reachable. The cluster has been registered to Elastic Cloud." "$output"
 }
 
 test_cloud_api_with_es_payload_rejected() {
