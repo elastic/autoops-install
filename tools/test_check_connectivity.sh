@@ -387,7 +387,7 @@ test_cloud_api_with_es_payload_rejected() {
   start_path_mock_server 3 \
     "/" 200 '{"cluster_name": "test-cluster", "cluster_uuid": "test-uuid-abcd", "version": {"number": "8.12.0"}}' \
     "/_license" 200 '{"license": {"status": "active", "type": "basic", "uid": "test-uid-1234"}}' \
-    "/api/v1/cloud-connected/clusters" 403 '{"error": "Forbidden"}'
+    "/api/v1/cloud-connected/clusters" 403 '{"errors":[{"code":"cluster.already_registered","message":"Cluster is already registered"}]}'
 
   local output
   local exit_code=0
@@ -403,7 +403,7 @@ test_cloud_api_with_es_payload_rejected() {
   stop_mock_server
 
   assert_exit_code 1 "$exit_code"
-  assert_output_contains "❌ FAIL:    Registration failed (HTTP 403)." "$output"
+  assert_output_contains "Registration failed (HTTP 403) (cluster.already_registered: Cluster is already registered)." "$output"
 }
 
 test_otel_success() {

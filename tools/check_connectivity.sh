@@ -269,7 +269,7 @@ check_cloud_api() {
       -H "Authorization: ApiKey ${api_key}" \
       -d "$payload" \
       -w "%{http_code}" \
-      -o /dev/null \
+      -o "${RESPONSE_FILE}" \
       --connect-timeout 10 \
       --max-time 30 \
       "${check_url}" 2>"${ERROR_FILE}") || curl_exit=$?
@@ -305,7 +305,18 @@ check_cloud_api() {
         print_success "Reachable. Can register to Elastic Cloud."
       fi
     else
-      print_error "Registration failed (HTTP $http_code)."
+      local error_detail=""
+      if [[ -f "${RESPONSE_FILE}" ]]; then
+        local error_code error_message
+        error_code=$(grep -o '"code"[[:space:]]*:[[:space:]]*"[^"]*"' "${RESPONSE_FILE}" 2>/dev/null | head -1 | sed 's/.*:.*"\([^"]*\)".*/\1/')
+        error_message=$(grep -o '"message"[[:space:]]*:[[:space:]]*"[^"]*"' "${RESPONSE_FILE}" 2>/dev/null | head -1 | sed 's/.*:.*"\([^"]*\)".*/\1/')
+        if [[ -n "$error_code" && -n "$error_message" ]]; then
+          error_detail=" ($error_code: $error_message)"
+        elif [[ -n "$error_message" ]]; then
+          error_detail=" ($error_message)"
+        fi
+      fi
+      print_error "Registration failed (HTTP $http_code)${error_detail}."
       ((CHECKS_FAILED++))
       return 1
     fi
