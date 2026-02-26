@@ -1034,6 +1034,42 @@ test_no_proxy_hint_without_proxy() {
   assert_output_not_contains "proxy is configured" "$output"
 }
 
+test_connection_timeout_port_extraction() {
+  log_test "Connection timeout - port extracted from calling method URLs"
+
+  # Extract only the two functions needed, no main execution or side effects
+  local fn_script
+  fn_script=$(mktemp)
+  {
+    sed -n '/^extract_port_from_url()/,/^}/p' "$CHECK_SCRIPT"
+    sed -n '/^interpret_curl_error()/,/^}/p' "$CHECK_SCRIPT"
+  } > "$fn_script"
+
+  run_interpret() {
+    bash -c "source '$fn_script'; interpret_curl_error \"\$@\"" -- "$@"
+  }
+
+  local result
+
+  # check_cloud_api default: https with no explicit port → 443
+  result=$(run_interpret 28 "" "https://api.elastic-cloud.com/api/v1/cloud-connected/clusters")
+  assert_output_contains "Port 443" "$result"
+
+  # check_otel default: https with no explicit port → 443
+  result=$(run_interpret 28 "" "https://otel-auto-ops.ap-northeast-1.aws.svc.elastic.cloud/v1/logs")
+  assert_output_contains "Port 443" "$result"
+
+  # check_elasticsearch with HTTP and explicit port → 9200
+  result=$(run_interpret 28 "" "http://localhost:9200/")
+  assert_output_contains "Port 9200" "$result"
+
+  # check_elasticsearch with HTTPS and explicit port → 9243
+  result=$(run_interpret 28 "" "https://my-es.example.com:9243/_license")
+  assert_output_contains "Port 9243" "$result"
+
+  rm -f "$fn_script"
+}
+
 # ---------------------------
 # Run all tests
 # ---------------------------
@@ -1098,6 +1134,7 @@ run_all_tests() {
   test_unknown_argument
   test_proxy_hint_on_connection_failure
   test_no_proxy_hint_without_proxy
+  test_connection_timeout_port_extraction
 
   # Print summary
   echo ""

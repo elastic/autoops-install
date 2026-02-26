@@ -539,7 +539,7 @@ check_cloud_api() {
 
   if [[ $curl_exit -ne 0 ]]; then
     local error_msg
-    error_msg=$(interpret_curl_error "$curl_exit" "$(cat "${ERROR_FILE}" 2>/dev/null)")
+    error_msg=$(interpret_curl_error "$curl_exit" "$(cat "${ERROR_FILE}" 2>/dev/null)" "$check_url")
     print_error "$error_msg"
     if [[ "$PROXY_CONFIGURED" == "true" && "$curl_exit" != "5" && "$curl_exit" != "97" ]]; then
       print_warning "A proxy is configured — this may be causing the connection failure"
@@ -617,7 +617,7 @@ check_otel() {
 
   if [[ $curl_exit -ne 0 ]]; then
     local error_msg
-    error_msg=$(interpret_curl_error "$curl_exit" "$(cat "${ERROR_FILE}" 2>/dev/null)")
+    error_msg=$(interpret_curl_error "$curl_exit" "$(cat "${ERROR_FILE}" 2>/dev/null)" "$check_url")
     print_error "$error_msg"
     if [[ "$PROXY_CONFIGURED" == "true" && "$curl_exit" != "5" && "$curl_exit" != "97" ]]; then
       print_warning "A proxy is configured — this may be causing the connection failure"
