@@ -94,6 +94,17 @@ mask_value() {
   echo "**REDACTED**"
 }
 
+# Redact user:password credentials embedded in a URL, e.g.
+#   http://user:pass@host:8080 -> http://**REDACTED**:**REDACTED**@host:8080
+redact_url_credentials() {
+  local url="$1"
+  if [[ "$url" =~ ^([a-zA-Z][a-zA-Z0-9+.-]*)://([^:@]+):([^@]+)@(.+)$ ]]; then
+    echo "${BASH_REMATCH[1]}://**REDACTED**:**REDACTED**@${BASH_REMATCH[4]}"
+  else
+    echo "$url"
+  fi
+}
+
 # ---------------------------
 # Temporary file cleanup
 # ---------------------------
@@ -235,7 +246,7 @@ check_proxy() {
     local value="${!var:-}"
     if [[ -n "$value" ]]; then
       proxy_found=1
-      print_info "$var=$value"
+      print_info "$var=$(redact_url_credentials "$value")"
     fi
   done
 
