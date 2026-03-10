@@ -33,6 +33,12 @@ spec:
         - args:
             - '--config'
             - otel_samples/autoops_es.yml
+            # TODO: Remove these lines after 9.3.2+ (https://github.com/elastic/elastic-agent/pull/13093)
+            - '--set'
+            - 'exporters::otlphttp::sending_queue::sizer=requests'
+            - '--set'
+            - 'exporters::otlphttp::sending_queue::batch::sizer=bytes'
+            # END TODO
           env:
             - name: AUTOOPS_TOKEN
               valueFrom:
