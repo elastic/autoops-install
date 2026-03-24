@@ -21,7 +21,7 @@
 # Configurable defaults
 # ---------------------------
 DOWNLOAD_URL="https://artifacts.elastic.co/downloads/beats/elastic-agent"
-VERSION="9.3.1"
+VERSION="9.3.2"
 DO_NOT_DELETE=false
 CACHE_DIR="${AUTOOPS_CACHE_DIR:-$HOME/.cache/elastic-agent-installer}"
 ELASTIC_CLOUD_CONNECTED_MODE_API_URL=""
