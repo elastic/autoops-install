@@ -328,26 +328,40 @@ check_otel() {
     using_default=" (default)"
   fi
   local check_url="${otel_url}/v1/logs"
+  local autoops_token="${AUTOOPS_TOKEN:-}"
 
   print_info "URL: ${otel_url}${using_default}"
+  if [[ -n "$autoops_token" ]]; then
+    print_info "AUTOOPS_TOKEN: $(mask_value "$autoops_token")"
+  fi
   print_check "connectivity to ${check_url}"
 
   local http_code
   local curl_exit
 
-  http_code=$(curl -sS -X POST \
-    -H "Content-Length: 0" \
-    -w "%{http_code}" \
-    -o /dev/null \
-    --connect-timeout 10 \
-    --max-time 30 \
-    "${check_url}" 2>"${ERROR_FILE}") || curl_exit=$?
+  if [[ -n "$autoops_token" ]]; then
+    http_code=$(curl -sS -X POST \
+      -H "Content-Length: 0" \
+      -H "Authorization: AutoOpsToken ${autoops_token}" \
+      -w "%{http_code}" \
+      -o "${RESPONSE_FILE}" \
+      --connect-timeout 10 \
+      --max-time 30 \
+      "${check_url}" 2>"${ERROR_FILE}") || curl_exit=$?
+  else
+    http_code=$(curl -sS -X POST \
+      -H "Content-Length: 0" \
+      -w "%{http_code}" \
+      -o "${RESPONSE_FILE}" \
+      --connect-timeout 10 \
+      --max-time 30 \
+      "${check_url}" 2>"${ERROR_FILE}") || curl_exit=$?
+  fi
 
   curl_exit=${curl_exit:-0}
 
   if [[ $curl_exit -ne 0 ]]; then
-    local error_msg
-    error_msg=$(interpret_curl_error "$curl_exit" "$(cat "${ERROR_FILE}" 2>/dev/null)" "$check_url")
+    local error_msg=$(interpret_curl_error "$curl_exit" "$(cat "${ERROR_FILE}" 2>/dev/null)" "$check_url")
     print_error "$error_msg"
     if [[ "$PROXY_CONFIGURED" == "true" && "$curl_exit" != "5" && "$curl_exit" != "97" ]]; then
       print_warning "A proxy is configured — this may be causing the connection failure"
@@ -356,13 +370,36 @@ check_otel() {
     return 1
   fi
 
-  if [[ "$DEBUG" == "true" ]]; then
-    print_success "Reachable. Can ship metrics to Elastic Cloud. (HTTP $http_code)"
+  if [[ -n "$autoops_token" ]]; then
+    if [[ "$http_code" == "415" ]]; then
+      if [[ "$DEBUG" == "true" ]]; then
+        print_success "Reachable and authenticated. Can ship metrics to Elastic Cloud. (HTTP $http_code)"
+      else
+        print_success "Reachable and authenticated. Can ship metrics to Elastic Cloud."
+      fi
+      ((CHECKS_PASSED++))
+      return 0
+    else
+      print_error "Reachable but authentication failed or unexpected response. (HTTP $http_code)"
+      ((CHECKS_FAILED++))
+      return 1
+    fi
   else
-    print_success "Reachable. Can ship metrics to Elastic Cloud."
+    local response_body=$(cat "${RESPONSE_FILE}" 2>/dev/null)
+    if [[ "$http_code" == "401" && "$response_body" == *'"code":16'* && "$response_body" == *'"message":"no auth provided"'* ]]; then
+      if [[ "$DEBUG" == "true" ]]; then
+        print_success "Reachable. Can ship metrics to Elastic Cloud. (HTTP $http_code)"
+      else
+        print_success "Reachable. Can ship metrics to Elastic Cloud."
+      fi
+      ((CHECKS_PASSED++))
+      return 0
+    else
+      print_error "Reachable but unexpected response (HTTP $http_code). Set AUTOOPS_TOKEN to validate authentication end-to-end."
+      ((CHECKS_FAILED++))
+      return 1
+    fi
   fi
-  ((CHECKS_PASSED++))
-  return 0
 }
 
 # ---------------------------
