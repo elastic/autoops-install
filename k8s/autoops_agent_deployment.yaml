@@ -6,7 +6,7 @@ metadata:
     app: autoops-elastic-agent
     app.kubernetes.io/component: autoops
     app.kubernetes.io/name: autoops-elastic-agent
-    app.kubernetes.io/version: 9.3.2
+    app.kubernetes.io/version: 9.3.3
 spec:
   progressDeadlineSeconds: 600
   replicas: 1
@@ -85,7 +85,7 @@ spec:
                   key: cloud-connected-mode-api-url
                   optional: true
           image: >-
-            docker.elastic.co/elastic-agent/elastic-otel-collector-wolfi:9.3.2
+            docker.elastic.co/elastic-agent/elastic-otel-collector-wolfi:9.3.3
           imagePullPolicy: Always
           name: autoops-elastic-agent
           resources: {}
