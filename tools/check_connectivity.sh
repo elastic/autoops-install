@@ -130,6 +130,7 @@ CHECKS_FAILED=0
 CHECKS_SKIPPED=0
 CHECKS_WARNED=0
 PROXY_CONFIGURED=false
+CA_REQUIRED=false
 
 ES_CLUSTER_ID=""
 ES_CLUSTER_NAME=""
@@ -337,9 +338,12 @@ check_elasticsearch() {
 
     test_curl_exit=${test_curl_exit:-0}
 
-    # If connection succeeded without CA, warn the user
+    # If connection succeeded without CA, warn the user; otherwise flag it as required
     if [[ $test_curl_exit -eq 0 ]]; then
       ca_warning="Connection secure without provided CA file."
+    else
+      print_info "CA certificate: Required"
+      CA_REQUIRED=true
     fi
 
     ca_opts=(--cacert "${AUTOOPS_ES_CA}")
@@ -745,20 +749,30 @@ print_summary() {
   fi
   echo ""
 
+  local summary_exit=0
+
   if [[ $CHECKS_FAILED -gt 0 ]]; then
     print_error "Connectivity issues detected. AutoOps Agent will not function."
     echo ""
     echo "  Review the troubleshooting guide and address issues before running the agent:"
     echo "  https://www.elastic.co/docs/deploy-manage/monitor/autoops/cc-cloud-connect-autoops-troubleshooting"
-    return 1
+    summary_exit=1
   elif [[ $CHECKS_SKIPPED -gt 0 ]]; then
     print_success "Elastic Cloud connectivity checks passed."
     print_skipped "The Elasticsearch environment was not checked."
-    return 2
+    summary_exit=2
   else
     print_success "All checks passed. The environment is ready to use AutoOps."
-    return 0
   fi
+
+  if [[ "$CA_REQUIRED" == "true" ]]; then
+    echo ""
+    echo "  A custom CA Certificate is required when running the AutoOps Agent. You must change"
+    echo "  \`otel_samples/autoops_es.yml\` to \`otel_samples/autoops_es_ssl.yml\` and specify"
+    echo "  \`AUTOOPS_ES_CA\`, or otherwise trust the CA Certificate where the AutoOps Agent runs."
+  fi
+
+  return $summary_exit
 }
 
 # ---------------------------
