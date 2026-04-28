@@ -806,6 +806,61 @@ test_elasticsearch_ca_not_found() {
   assert_output_contains "CA certificate file not found" "$output"
 }
 
+test_elasticsearch_ca_not_required() {
+  log_test "Elasticsearch - CA certificate provided but not required"
+
+  local ca_file
+  ca_file=$(mktemp)
+
+  start_path_mock_server 4 \
+    "/" 200 '{"cluster_name": "test-cluster", "cluster_uuid": "test-uuid-abcd", "version": {"number": "8.12.0"}}' \
+    "/_cluster/settings" 200 '{}' \
+    "/_license" 200 '{"license": {"status": "active", "type": "basic", "uid": "test-uid-1234"}}'
+
+  local output
+  local exit_code=0
+
+  output=$(
+    ELASTIC_CLOUD_CONNECTED_MODE_API_URL="http://127.0.0.1:1" \
+    AUTOOPS_OTEL_URL="http://127.0.0.1:1" \
+    AUTOOPS_ES_URL="${MOCK_SERVER_URL}" \
+    AUTOOPS_ES_CA="${ca_file}" \
+    bash "$CHECK_SCRIPT" 2>&1
+  ) || exit_code=$?
+
+  stop_mock_server
+  rm -f "${ca_file}"
+
+  assert_output_contains "Connection secure without provided CA file." "$output"
+  assert_output_not_contains "CA certificate: Required" "$output"
+  assert_output_not_contains "otel_samples/autoops_es_ssl.yml" "$output"
+}
+
+test_elasticsearch_ca_required() {
+  log_test "Elasticsearch - CA certificate required"
+
+  local ca_file
+  ca_file=$(mktemp)
+
+  local output
+  local exit_code=0
+
+  output=$(
+    ELASTIC_CLOUD_CONNECTED_MODE_API_URL="http://127.0.0.1:1" \
+    AUTOOPS_OTEL_URL="http://127.0.0.1:1" \
+    AUTOOPS_ES_URL="http://127.0.0.1:1" \
+    AUTOOPS_ES_CA="${ca_file}" \
+    bash "$CHECK_SCRIPT" 2>&1
+  ) || exit_code=$?
+
+  rm -f "${ca_file}"
+
+  assert_exit_code 1 "$exit_code"
+  assert_output_contains "CA certificate: Required" "$output"
+  assert_output_contains "otel_samples/autoops_es_ssl.yml" "$output"
+  assert_output_contains "AUTOOPS_ES_CA" "$output"
+}
+
 test_elasticsearch_version_too_old() {
   log_test "Elasticsearch - version below minimum 7.17.0"
 
@@ -1386,6 +1441,8 @@ run_all_tests() {
   test_elasticsearch_auth_failure_401
   test_elasticsearch_auth_failure_403
   test_elasticsearch_ca_not_found
+  test_elasticsearch_ca_not_required
+  test_elasticsearch_ca_required
   test_elasticsearch_version_too_old
   test_elasticsearch_version_exact_minimum
   test_elasticsearch_license_inactive
