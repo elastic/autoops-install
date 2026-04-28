@@ -94,6 +94,17 @@ mask_value() {
   echo "**REDACTED**"
 }
 
+# Redact user:password credentials embedded in a URL, e.g.
+#   http://user:pass@host:8080 -> http://**REDACTED**:**REDACTED**@host:8080
+redact_url_credentials() {
+  local url="$1"
+  if [[ "$url" =~ ^([a-zA-Z][a-zA-Z0-9+.-]*)://([^:@]+):([^@]+)@(.+)$ ]]; then
+    echo "${BASH_REMATCH[1]}://**REDACTED**:**REDACTED**@${BASH_REMATCH[4]}"
+  else
+    echo "$url"
+  fi
+}
+
 # ---------------------------
 # Temporary file cleanup
 # ---------------------------
@@ -241,7 +252,7 @@ check_proxy() {
     local value="${!var:-}"
     if [[ -n "$value" ]]; then
       proxy_found=1
-      print_info "$var=$value"
+      print_info "$var=$(redact_url_credentials "$value")"
     fi
   done
 
@@ -598,20 +609,35 @@ check_otel() {
     using_default=" (default)"
   fi
   local check_url="${otel_url}/v1/logs"
+  local autoops_token="${AUTOOPS_TOKEN:-}"
 
   print_info "URL: ${otel_url}${using_default}"
+  if [[ -n "$autoops_token" ]]; then
+    print_info "AUTOOPS_TOKEN: $(mask_value "$autoops_token")"
+  fi
   print_check "connectivity to ${check_url}"
 
   local http_code
   local curl_exit
 
-  http_code=$(curl -sS -X POST \
-    -H "Content-Length: 0" \
-    -w "%{http_code}" \
-    -o /dev/null \
-    --connect-timeout 10 \
-    --max-time 30 \
-    "${check_url}" 2>"${ERROR_FILE}") || curl_exit=$?
+  if [[ -n "$autoops_token" ]]; then
+    http_code=$(curl -sS -X POST \
+      -H "Content-Length: 0" \
+      -H "Authorization: AutoOpsToken ${autoops_token}" \
+      -w "%{http_code}" \
+      -o "${RESPONSE_FILE}" \
+      --connect-timeout 10 \
+      --max-time 30 \
+      "${check_url}" 2>"${ERROR_FILE}") || curl_exit=$?
+  else
+    http_code=$(curl -sS -X POST \
+      -H "Content-Length: 0" \
+      -w "%{http_code}" \
+      -o "${RESPONSE_FILE}" \
+      --connect-timeout 10 \
+      --max-time 30 \
+      "${check_url}" 2>"${ERROR_FILE}") || curl_exit=$?
+  fi
 
   curl_exit=${curl_exit:-0}
 
@@ -626,13 +652,37 @@ check_otel() {
     return 1
   fi
 
-  if [[ "$DEBUG" == "true" ]]; then
-    print_success "Reachable. Can ship metrics to Elastic Cloud. (HTTP $http_code)"
+  if [[ -n "$autoops_token" ]]; then
+    if [[ "$http_code" == "415" ]]; then
+      if [[ "$DEBUG" == "true" ]]; then
+        print_success "Reachable and authenticated. Can ship metrics to Elastic Cloud. (HTTP $http_code)"
+      else
+        print_success "Reachable and authenticated. Can ship metrics to Elastic Cloud."
+      fi
+      ((CHECKS_PASSED++))
+      return 0
+    else
+      print_error "Reachable but authentication failed or unexpected response. (HTTP $http_code)"
+      ((CHECKS_FAILED++))
+      return 1
+    fi
   else
-    print_success "Reachable. Can ship metrics to Elastic Cloud."
+    local response_body
+    response_body=$(cat "${RESPONSE_FILE}" 2>/dev/null)
+    if [[ "$http_code" == "401" && "$response_body" == *'"code":16'* && "$response_body" == *'"message":"no auth provided"'* ]]; then
+      if [[ "$DEBUG" == "true" ]]; then
+        print_success "Reachable. Can ship metrics to Elastic Cloud. (HTTP $http_code)"
+      else
+        print_success "Reachable. Can ship metrics to Elastic Cloud."
+      fi
+      ((CHECKS_PASSED++))
+      return 0
+    else
+      print_error "Reachable but unexpected response (HTTP $http_code). Set AUTOOPS_TOKEN to validate authentication end-to-end."
+      ((CHECKS_FAILED++))
+      return 1
+    fi
   fi
-  ((CHECKS_PASSED++))
-  return 0
 }
 
 # ---------------------------

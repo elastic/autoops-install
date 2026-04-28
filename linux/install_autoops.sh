@@ -21,7 +21,7 @@
 # Configurable defaults
 # ---------------------------
 DOWNLOAD_URL="https://artifacts.elastic.co/downloads/beats/elastic-agent"
-VERSION="9.2.5"
+VERSION="9.3.3"
 DO_NOT_DELETE=false
 CACHE_DIR="${AUTOOPS_CACHE_DIR:-$HOME/.cache/elastic-agent-installer}"
 ELASTIC_CLOUD_CONNECTED_MODE_API_URL=""
@@ -186,11 +186,24 @@ Environment="AUTOOPS_OTEL_URL=${AUTOOPS_OTEL_URL}"
 Environment="AUTOOPS_TOKEN=${AUTOOPS_TOKEN}"
 Environment="AUTOOPS_TEMP_RESOURCE_ID=${AUTOOPS_TEMP_RESOURCE_ID}"
 Environment="ELASTIC_CLOUD_CONNECTED_MODE_API_KEY=${ELASTIC_CLOUD_CONNECTED_MODE_API_KEY}"
+EOF
+
+if [[ -n "${ELASTIC_CLOUD_CONNECTED_MODE_API_URL}" ]]; then
+  sudo tee -a /etc/systemd/system/elastic-agent.service.d/autoops-env.conf >/dev/null <<EOF
 Environment="ELASTIC_CLOUD_CONNECTED_MODE_API_URL=${ELASTIC_CLOUD_CONNECTED_MODE_API_URL}"
-Environment="AUTOOPS_ES_USERNAME=${AUTOOPS_ES_USERNAME}"
-Environment="AUTOOPS_ES_PASSWORD=${AUTOOPS_ES_PASSWORD}"
+EOF
+fi
+
+if [[ -n "${AUTOOPS_ES_API_KEY}" ]]; then
+  sudo tee -a /etc/systemd/system/elastic-agent.service.d/autoops-env.conf >/dev/null <<EOF
 Environment="AUTOOPS_ES_API_KEY=${AUTOOPS_ES_API_KEY}"
 EOF
+elif [[ -n "${AUTOOPS_ES_USERNAME}" && -n "${AUTOOPS_ES_PASSWORD}" ]]; then
+  sudo tee -a /etc/systemd/system/elastic-agent.service.d/autoops-env.conf >/dev/null <<EOF
+Environment="AUTOOPS_ES_USERNAME=${AUTOOPS_ES_USERNAME}"
+Environment="AUTOOPS_ES_PASSWORD=${AUTOOPS_ES_PASSWORD}"
+EOF
+fi
 
 sudo systemctl daemon-reexec
 sudo systemctl daemon-reload

@@ -319,6 +319,60 @@ test_proxy_no_warning_when_https_set() {
   assert_output_not_contains "HTTPS_PROXY is missing" "$output"
 }
 
+test_proxy_no_credentials_unchanged() {
+  log_test "Proxy redaction - URL without credentials is unchanged"
+
+  local output
+  local exit_code=0
+
+  output=$(
+    unset http_proxy https_proxy no_proxy all_proxy
+    HTTP_PROXY="http://myproxy.example.com:8080" \
+    ELASTIC_CLOUD_CONNECTED_MODE_API_URL="http://127.0.0.1:1" \
+    AUTOOPS_OTEL_URL="http://127.0.0.1:1" \
+    bash "$CHECK_SCRIPT" 2>&1
+  ) || exit_code=$?
+
+  assert_output_contains "HTTP_PROXY=http://myproxy.example.com:8080" "$output"
+}
+
+test_proxy_credentials_redacted() {
+  log_test "Proxy redaction - credentials in URL are redacted"
+
+  local output
+  local exit_code=0
+
+  output=$(
+    unset http_proxy https_proxy no_proxy all_proxy
+    HTTP_PROXY="http://alice:s3cr3t@proxy.corp:3128" \
+    ELASTIC_CLOUD_CONNECTED_MODE_API_URL="http://127.0.0.1:1" \
+    AUTOOPS_OTEL_URL="http://127.0.0.1:1" \
+    bash "$CHECK_SCRIPT" 2>&1
+  ) || exit_code=$?
+
+  assert_output_contains 'HTTP_PROXY=http://\*\*REDACTED\*\*:\*\*REDACTED\*\*@proxy.corp:3128' "$output"
+  assert_output_not_contains "alice" "$output"
+  assert_output_not_contains "s3cr3t" "$output"
+}
+
+test_proxy_https_credentials_redacted() {
+  log_test "Proxy redaction - credentials redacted in HTTPS_PROXY"
+
+  local output
+  local exit_code=0
+
+  output=$(
+    unset http_proxy https_proxy no_proxy all_proxy HTTP_PROXY
+    HTTPS_PROXY="https://bob:p%40ss@secureproxy.corp:8443" \
+    ELASTIC_CLOUD_CONNECTED_MODE_API_URL="http://127.0.0.1:1" \
+    AUTOOPS_OTEL_URL="http://127.0.0.1:1" \
+    bash "$CHECK_SCRIPT" 2>&1
+  ) || exit_code=$?
+
+  assert_output_contains 'HTTPS_PROXY=https://\*\*REDACTED\*\*:\*\*REDACTED\*\*@secureproxy.corp:8443' "$output"
+  assert_output_not_contains "bob" "$output"
+}
+
 test_cloud_api_success() {
   log_test "Cloud API - successful connection"
 
@@ -362,12 +416,13 @@ test_cloud_api_with_es_payload() {
     "/" 200 '{"cluster_name": "test-cluster", "cluster_uuid": "test-uuid-abcd", "version": {"number": "8.12.0"}}' \
     "/_license" 200 '{"license": {"status": "active", "type": "basic", "uid": "test-uid-1234"}}' \
     "/api/v1/cloud-connected/clusters" 200 '{"ok": true}' \
-    "/v1/logs" 200 '{"ok": true}'
+    "/v1/logs" 401 '{"code":16,"message":"no auth provided"}'
 
   local output
   local exit_code=0
 
   output=$(
+    unset AUTOOPS_TOKEN
     ELASTIC_CLOUD_CONNECTED_MODE_API_URL="${MOCK_SERVER_URL}" \
     AUTOOPS_OTEL_URL="${MOCK_SERVER_URL}" \
     AUTOOPS_ES_URL="${MOCK_SERVER_URL}" \
@@ -407,14 +462,15 @@ test_cloud_api_with_es_payload_rejected() {
 }
 
 test_otel_success() {
-  log_test "OTel endpoint - successful connection"
+  log_test "OTel endpoint - successful connection without token (HTTP 401 + no auth body)"
 
-  start_mock_server "200" '{"status": "ok"}'
+  start_mock_server "401" '{"code":16,"message":"no auth provided"}'
 
   local output
   local exit_code=0
 
   output=$(
+    unset AUTOOPS_TOKEN
     ELASTIC_CLOUD_CONNECTED_MODE_API_URL="http://127.0.0.1:1" \
     AUTOOPS_OTEL_URL="${MOCK_SERVER_URL}" \
     bash "$CHECK_SCRIPT" 2>&1
@@ -424,7 +480,91 @@ test_otel_success() {
 
   assert_output_contains "OTel Endpoint" "$output"
   assert_output_contains "✅ SUCCESS: Reachable. Can ship metrics to Elastic Cloud." "$output"
-  assert_output_not_contains "HTTP 200" "$output"
+  assert_output_not_contains "HTTP 401" "$output"
+}
+
+test_otel_no_token_unexpected_response() {
+  log_test "OTel endpoint - fails on unexpected response without token"
+
+  start_mock_server "200" '{"status": "ok"}'
+
+  local output
+  local exit_code=0
+
+  output=$(
+    unset AUTOOPS_TOKEN
+    ELASTIC_CLOUD_CONNECTED_MODE_API_URL="http://127.0.0.1:1" \
+    AUTOOPS_OTEL_URL="${MOCK_SERVER_URL}" \
+    bash "$CHECK_SCRIPT" 2>&1
+  ) || exit_code=$?
+
+  stop_mock_server
+
+  assert_output_contains "Reachable but unexpected response (HTTP 200)" "$output"
+  assert_output_contains "Set AUTOOPS_TOKEN to validate authentication end-to-end" "$output"
+}
+
+test_otel_with_token_success() {
+  log_test "OTel endpoint - authenticated success with AUTOOPS_TOKEN (HTTP 415)"
+
+  start_mock_server "415" ''
+
+  local output
+  local exit_code=0
+
+  output=$(
+    ELASTIC_CLOUD_CONNECTED_MODE_API_URL="http://127.0.0.1:1" \
+    AUTOOPS_OTEL_URL="${MOCK_SERVER_URL}" \
+    AUTOOPS_TOKEN="my-test-token" \
+    bash "$CHECK_SCRIPT" 2>&1
+  ) || exit_code=$?
+
+  stop_mock_server
+
+  assert_output_contains "✅ SUCCESS: Reachable and authenticated. Can ship metrics to Elastic Cloud." "$output"
+  assert_output_not_contains "HTTP 415" "$output"
+}
+
+test_otel_with_token_auth_failure() {
+  log_test "OTel endpoint - fails when token provided but server returns non-415"
+
+  start_mock_server "401" '{"code":16,"message":"no auth provided"}'
+
+  local output
+  local exit_code=0
+
+  output=$(
+    ELASTIC_CLOUD_CONNECTED_MODE_API_URL="http://127.0.0.1:1" \
+    AUTOOPS_OTEL_URL="${MOCK_SERVER_URL}" \
+    AUTOOPS_TOKEN="bad-token" \
+    bash "$CHECK_SCRIPT" 2>&1
+  ) || exit_code=$?
+
+  stop_mock_server
+
+  assert_output_contains "Reachable but authentication failed or unexpected response. (HTTP 401)" "$output"
+}
+
+test_otel_token_masked_in_output() {
+  log_test "OTel endpoint - AUTOOPS_TOKEN value is masked in output"
+
+  start_mock_server "415" ''
+
+  local output
+  local exit_code=0
+
+  output=$(
+    ELASTIC_CLOUD_CONNECTED_MODE_API_URL="http://127.0.0.1:1" \
+    AUTOOPS_OTEL_URL="${MOCK_SERVER_URL}" \
+    AUTOOPS_TOKEN="super-secret-token" \
+    bash "$CHECK_SCRIPT" 2>&1
+  ) || exit_code=$?
+
+  stop_mock_server
+
+  assert_output_contains "AUTOOPS_TOKEN:" "$output"
+  assert_output_not_contains "super-secret-token" "$output"
+  assert_output_contains "REDACTED" "$output"
 }
 
 test_otel_default_url() {
@@ -549,7 +689,7 @@ test_elasticsearch_api_key_with_colon() {
 
   start_path_mock_server 4 \
     "/api/v1/cloud-connected/clusters" 200 '{"ok": true}' \
-    "/v1/logs" 200 '{"ok": true}' \
+    "/v1/logs" 401 '{"code":16,"message":"no auth provided"}' \
     "/" 200 '{"cluster_name": "test-cluster", "cluster_uuid": "test-uuid-abcd", "version": {"number": "8.12.0"}}' \
     "/_license" 200 '{"license": {"status": "active", "type": "basic", "uid": "test-uid-1234"}}'
 
@@ -557,6 +697,7 @@ test_elasticsearch_api_key_with_colon() {
   local exit_code=0
 
   output=$(
+    unset AUTOOPS_TOKEN
     ELASTIC_CLOUD_CONNECTED_MODE_API_URL="${MOCK_SERVER_URL}" \
     AUTOOPS_OTEL_URL="${MOCK_SERVER_URL}" \
     AUTOOPS_ES_URL="${MOCK_SERVER_URL}" \
@@ -778,7 +919,7 @@ test_summary_all_pass() {
 
   start_path_mock_server 4 \
     "/api/v1/cloud-connected/clusters" 200 '{"ok": true}' \
-    "/v1/logs" 200 '{"ok": true}' \
+    "/v1/logs" 401 '{"code":16,"message":"no auth provided"}' \
     "/" 200 '{"cluster_name": "test", "version": {"number": "8.12.0"}}' \
     "/_license" 200 '{"license": {"status": "active", "type": "basic", "uid": "test-uid-1234"}}'
 
@@ -786,6 +927,7 @@ test_summary_all_pass() {
   local exit_code=0
 
   output=$(
+    unset AUTOOPS_TOKEN
     ELASTIC_CLOUD_CONNECTED_MODE_API_URL="${MOCK_SERVER_URL}" \
     AUTOOPS_OTEL_URL="${MOCK_SERVER_URL}" \
     AUTOOPS_ES_URL="${MOCK_SERVER_URL}" \
@@ -821,12 +963,13 @@ test_summary_skipped() {
 
   start_path_mock_server 2 \
     "/api/v1/cloud-connected/clusters" 200 '{"ok": true}' \
-    "/v1/logs" 200 '{"ok": true}'
+    "/v1/logs" 401 '{"code":16,"message":"no auth provided"}'
 
   local output
   local exit_code=0
 
   output=$(
+    unset AUTOOPS_TOKEN
     ELASTIC_CLOUD_CONNECTED_MODE_API_URL="${MOCK_SERVER_URL}" \
     AUTOOPS_OTEL_URL="${MOCK_SERVER_URL}" \
     bash "$CHECK_SCRIPT" 2>&1
@@ -881,14 +1024,15 @@ test_debug_flag_shows_http_code() {
 }
 
 test_debug_flag_otel_shows_http_code() {
-  log_test "Debug flag - OTel shows HTTP code with --debug"
+  log_test "Debug flag - OTel shows HTTP 401 code with --debug (no token)"
 
-  start_mock_server "200" '{"status": "ok"}'
+  start_mock_server "401" '{"code":16,"message":"no auth provided"}'
 
   local output
   local exit_code=0
 
   output=$(
+    unset AUTOOPS_TOKEN
     ELASTIC_CLOUD_CONNECTED_MODE_API_URL="http://127.0.0.1:1" \
     AUTOOPS_OTEL_URL="${MOCK_SERVER_URL}" \
     bash "$CHECK_SCRIPT" --debug 2>&1
@@ -896,7 +1040,27 @@ test_debug_flag_otel_shows_http_code() {
 
   stop_mock_server
 
-  assert_output_contains "Can ship metrics to Elastic Cloud. (HTTP 200)" "$output"
+  assert_output_contains "Can ship metrics to Elastic Cloud. (HTTP 401)" "$output"
+}
+
+test_debug_flag_otel_shows_http_code_with_token() {
+  log_test "Debug flag - OTel shows HTTP 415 code with --debug and AUTOOPS_TOKEN"
+
+  start_mock_server "415" ''
+
+  local output
+  local exit_code=0
+
+  output=$(
+    ELASTIC_CLOUD_CONNECTED_MODE_API_URL="http://127.0.0.1:1" \
+    AUTOOPS_OTEL_URL="${MOCK_SERVER_URL}" \
+    AUTOOPS_TOKEN="my-test-token" \
+    bash "$CHECK_SCRIPT" --debug 2>&1
+  ) || exit_code=$?
+
+  stop_mock_server
+
+  assert_output_contains "Can ship metrics to Elastic Cloud. (HTTP 415)" "$output"
 }
 
 test_unknown_argument() {
@@ -1104,6 +1268,9 @@ run_all_tests() {
   test_proxy_detection_with_proxy
   test_proxy_http_without_https
   test_proxy_no_warning_when_https_set
+  test_proxy_no_credentials_unchanged
+  test_proxy_credentials_redacted
+  test_proxy_https_credentials_redacted
   test_elasticsearch_skipped
   test_elasticsearch_success
   test_elasticsearch_with_api_key
@@ -1121,6 +1288,10 @@ run_all_tests() {
   test_cloud_api_with_es_payload
   test_cloud_api_with_es_payload_rejected
   test_otel_success
+  test_otel_no_token_unexpected_response
+  test_otel_with_token_success
+  test_otel_with_token_auth_failure
+  test_otel_token_masked_in_output
   test_otel_default_url
   test_cloud_api_default_url
   test_no_default_indicator_when_custom_url
@@ -1131,6 +1302,7 @@ run_all_tests() {
   test_curl_not_installed
   test_debug_flag_shows_http_code
   test_debug_flag_otel_shows_http_code
+  test_debug_flag_otel_shows_http_code_with_token
   test_unknown_argument
   test_proxy_hint_on_connection_failure
   test_no_proxy_hint_without_proxy
