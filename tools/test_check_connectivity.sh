@@ -213,7 +213,8 @@ class MockHandler(http.server.BaseHTTPRequestHandler):
         pass
 
     def do_GET(self):
-        code, body = ROUTES.get(self.path, (404, '{"error": "not found"}'))
+        path = self.path.split('?')[0]
+        code, body = ROUTES.get(path, (404, '{"error": "not found"}'))
         self.send_response(code)
         self.send_header('Content-Type', 'application/json')
         self.end_headers()
@@ -412,8 +413,9 @@ test_cloud_api_connection_refused() {
 test_cloud_api_with_es_payload() {
   log_test "Cloud API - POSTs ES cluster data when API key provided"
 
-  start_path_mock_server 4 \
+  start_path_mock_server 5 \
     "/" 200 '{"cluster_name": "test-cluster", "cluster_uuid": "test-uuid-abcd", "version": {"number": "8.12.0"}}' \
+    "/_cluster/settings" 200 '{}' \
     "/_license" 200 '{"license": {"status": "active", "type": "basic", "uid": "test-uid-1234"}}' \
     "/api/v1/cloud-connected/clusters" 200 '{"ok": true}' \
     "/v1/logs" 401 '{"code":16,"message":"no auth provided"}'
@@ -439,8 +441,9 @@ test_cloud_api_with_es_payload() {
 test_cloud_api_with_es_payload_rejected() {
   log_test "Cloud API - registration fails on non-200/201 response"
 
-  start_path_mock_server 3 \
+  start_path_mock_server 4 \
     "/" 200 '{"cluster_name": "test-cluster", "cluster_uuid": "test-uuid-abcd", "version": {"number": "8.12.0"}}' \
+    "/_cluster/settings" 200 '{}' \
     "/_license" 200 '{"license": {"status": "active", "type": "basic", "uid": "test-uid-1234"}}' \
     "/api/v1/cloud-connected/clusters" 403 '{"errors":[{"code":"cluster.already_registered","message":"Cluster is already registered"}]}'
 
@@ -639,8 +642,9 @@ test_elasticsearch_skipped() {
 test_elasticsearch_success() {
   log_test "Elasticsearch - successful connection"
 
-  start_path_mock_server 2 \
+  start_path_mock_server 3 \
     "/" 200 '{"cluster_name": "test-cluster", "cluster_uuid": "test-uuid-abcd", "version": {"number": "8.12.0"}}' \
+    "/_cluster/settings" 200 '{}' \
     "/_license" 200 '{"license": {"status": "active", "type": "basic", "uid": "test-uid-1234"}}'
 
   local output
@@ -664,8 +668,9 @@ test_elasticsearch_success() {
 test_elasticsearch_with_api_key() {
   log_test "Elasticsearch - API key authentication display"
 
-  start_path_mock_server 2 \
+  start_path_mock_server 3 \
     "/" 200 '{"cluster_name": "test-cluster", "cluster_uuid": "test-uuid-abcd", "version": {"number": "8.12.0"}}' \
+    "/_cluster/settings" 200 '{}' \
     "/_license" 200 '{"license": {"status": "active", "type": "basic", "uid": "test-uid-1234"}}'
 
   local output
@@ -687,10 +692,11 @@ test_elasticsearch_with_api_key() {
 test_elasticsearch_api_key_with_colon() {
   log_test "Elasticsearch - API key with colon is base64 encoded"
 
-  start_path_mock_server 4 \
+  start_path_mock_server 5 \
     "/api/v1/cloud-connected/clusters" 200 '{"ok": true}' \
     "/v1/logs" 401 '{"code":16,"message":"no auth provided"}' \
     "/" 200 '{"cluster_name": "test-cluster", "cluster_uuid": "test-uuid-abcd", "version": {"number": "8.12.0"}}' \
+    "/_cluster/settings" 200 '{}' \
     "/_license" 200 '{"license": {"status": "active", "type": "basic", "uid": "test-uid-1234"}}'
 
   local output
@@ -714,8 +720,9 @@ test_elasticsearch_api_key_with_colon() {
 test_elasticsearch_with_basic_auth() {
   log_test "Elasticsearch - Basic authentication display"
 
-  start_path_mock_server 2 \
+  start_path_mock_server 3 \
     "/" 200 '{"cluster_name": "test-cluster", "cluster_uuid": "test-uuid-abcd", "version": {"number": "8.12.0"}}' \
+    "/_cluster/settings" 200 '{}' \
     "/_license" 200 '{"license": {"status": "active", "type": "basic", "uid": "test-uid-1234"}}'
 
   local output
@@ -824,8 +831,9 @@ test_elasticsearch_version_too_old() {
 test_elasticsearch_version_exact_minimum() {
   log_test "Elasticsearch - version exactly at minimum 7.17.0"
 
-  start_path_mock_server 2 \
+  start_path_mock_server 3 \
     "/" 200 '{"cluster_name": "min-cluster", "version": {"number": "7.17.0"}}' \
+    "/_cluster/settings" 200 '{}' \
     "/_license" 200 '{"license": {"status": "active", "type": "basic", "uid": "test-uid-1234"}}'
 
   local output
@@ -847,8 +855,9 @@ test_elasticsearch_version_exact_minimum() {
 test_elasticsearch_license_inactive() {
   log_test "Elasticsearch - license not active"
 
-  start_path_mock_server 2 \
+  start_path_mock_server 3 \
     "/" 200 '{"cluster_name": "test-cluster", "cluster_uuid": "test-uuid-abcd", "version": {"number": "8.12.0"}}' \
+    "/_cluster/settings" 200 '{}' \
     "/_license" 200 '{"license": {"status": "expired"}}'
 
   local output
@@ -870,8 +879,9 @@ test_elasticsearch_license_inactive() {
 test_elasticsearch_license_active() {
   log_test "Elasticsearch - license active"
 
-  start_path_mock_server 2 \
+  start_path_mock_server 3 \
     "/" 200 '{"cluster_name": "test-cluster", "cluster_uuid": "test-uuid-abcd", "version": {"number": "8.12.0"}}' \
+    "/_cluster/settings" 200 '{}' \
     "/_license" 200 '{"license": {"status": "active", "type": "basic", "uid": "test-uid-1234"}}'
 
   local output
@@ -893,8 +903,9 @@ test_elasticsearch_license_active() {
 test_value_masking() {
   log_test "Value masking - values are redacted"
 
-  start_path_mock_server 2 \
+  start_path_mock_server 3 \
     "/" 200 '{"cluster_name": "test", "version": {"number": "8.12.0"}}' \
+    "/_cluster/settings" 200 '{}' \
     "/_license" 200 '{"license": {"status": "active", "type": "basic", "uid": "test-uid-1234"}}'
 
   local output
@@ -917,10 +928,11 @@ test_value_masking() {
 test_summary_all_pass() {
   log_test "Summary - all checks pass"
 
-  start_path_mock_server 4 \
+  start_path_mock_server 5 \
     "/api/v1/cloud-connected/clusters" 200 '{"ok": true}' \
     "/v1/logs" 401 '{"code":16,"message":"no auth provided"}' \
     "/" 200 '{"cluster_name": "test", "version": {"number": "8.12.0"}}' \
+    "/_cluster/settings" 200 '{}' \
     "/_license" 200 '{"license": {"status": "active", "type": "basic", "uid": "test-uid-1234"}}'
 
   local output
@@ -1101,8 +1113,9 @@ test_elasticsearch_version_too_old() {
 test_elasticsearch_version_exact_minimum() {
   log_test "Elasticsearch - version exactly at minimum 7.17.0"
 
-  start_path_mock_server 2 \
+  start_path_mock_server 3 \
     "/" 200 '{"cluster_name": "min-cluster", "version": {"number": "7.17.0"}}' \
+    "/_cluster/settings" 200 '{}' \
     "/_license" 200 '{"license": {"status": "active"}}'
 
   local output
@@ -1124,8 +1137,9 @@ test_elasticsearch_version_exact_minimum() {
 test_elasticsearch_license_inactive() {
   log_test "Elasticsearch - license not active"
 
-  start_path_mock_server 2 \
+  start_path_mock_server 3 \
     "/" 200 '{"cluster_name": "test-cluster", "cluster_uuid": "test-uuid-abcd", "version": {"number": "8.12.0"}}' \
+    "/_cluster/settings" 200 '{}' \
     "/_license" 200 '{"license": {"status": "expired"}}'
 
   local output
@@ -1147,8 +1161,9 @@ test_elasticsearch_license_inactive() {
 test_elasticsearch_license_active() {
   log_test "Elasticsearch - license active with type and uid"
 
-  start_path_mock_server 2 \
+  start_path_mock_server 3 \
     "/" 200 '{"cluster_name": "test-cluster", "cluster_uuid": "test-uuid-abcd", "version": {"number": "8.12.0"}}' \
+    "/_cluster/settings" 200 '{}' \
     "/_license" 200 '{"license": {"status": "active", "type": "platinum", "uid": "abcd-1234-efgh"}}'
 
   local output
@@ -1234,6 +1249,98 @@ test_connection_timeout_port_extraction() {
   rm -f "$fn_script"
 }
 
+test_elasticsearch_display_name_transient() {
+  log_test "Elasticsearch - transient display name used as cluster name"
+
+  start_path_mock_server 3 \
+    "/" 200 '{"cluster_name": "raw-cluster", "cluster_uuid": "test-uuid-abcd", "version": {"number": "8.12.0"}}' \
+    "/_cluster/settings" 200 '{"transient":{"cluster.metadata.display_name":"Transient Display Name"},"persistent":{}}' \
+    "/_license" 200 '{"license": {"status": "active", "type": "basic", "uid": "test-uid-1234"}}'
+
+  local output
+
+  output=$(
+    ELASTIC_CLOUD_CONNECTED_MODE_API_URL="http://127.0.0.1:1" \
+    AUTOOPS_OTEL_URL="http://127.0.0.1:1" \
+    AUTOOPS_ES_URL="${MOCK_SERVER_URL}" \
+    bash "$CHECK_SCRIPT" 2>&1
+  ) || true
+
+  stop_mock_server
+
+  assert_output_contains "Cluster: Transient Display Name (test-uuid-abcd)" "$output"
+  assert_output_not_contains "raw-cluster" "$output"
+}
+
+test_elasticsearch_display_name_persistent() {
+  log_test "Elasticsearch - persistent display name used as cluster name"
+
+  start_path_mock_server 3 \
+    "/" 200 '{"cluster_name": "raw-cluster", "cluster_uuid": "test-uuid-abcd", "version": {"number": "8.12.0"}}' \
+    "/_cluster/settings" 200 '{"transient":{},"persistent":{"cluster.metadata.display_name":"Persistent Display Name"}}' \
+    "/_license" 200 '{"license": {"status": "active", "type": "basic", "uid": "test-uid-1234"}}'
+
+  local output
+
+  output=$(
+    ELASTIC_CLOUD_CONNECTED_MODE_API_URL="http://127.0.0.1:1" \
+    AUTOOPS_OTEL_URL="http://127.0.0.1:1" \
+    AUTOOPS_ES_URL="${MOCK_SERVER_URL}" \
+    bash "$CHECK_SCRIPT" 2>&1
+  ) || true
+
+  stop_mock_server
+
+  assert_output_contains "Cluster: Persistent Display Name (test-uuid-abcd)" "$output"
+  assert_output_not_contains "raw-cluster" "$output"
+}
+
+test_elasticsearch_display_name_transient_wins() {
+  log_test "Elasticsearch - transient display name takes priority over persistent"
+
+  start_path_mock_server 3 \
+    "/" 200 '{"cluster_name": "raw-cluster", "cluster_uuid": "test-uuid-abcd", "version": {"number": "8.12.0"}}' \
+    "/_cluster/settings" 200 '{"transient":{"cluster.metadata.display_name":"Transient Name"},"persistent":{"cluster.metadata.display_name":"Persistent Name"}}' \
+    "/_license" 200 '{"license": {"status": "active", "type": "basic", "uid": "test-uid-1234"}}'
+
+  local output
+
+  output=$(
+    ELASTIC_CLOUD_CONNECTED_MODE_API_URL="http://127.0.0.1:1" \
+    AUTOOPS_OTEL_URL="http://127.0.0.1:1" \
+    AUTOOPS_ES_URL="${MOCK_SERVER_URL}" \
+    bash "$CHECK_SCRIPT" 2>&1
+  ) || true
+
+  stop_mock_server
+
+  assert_output_contains "Cluster: Transient Name (test-uuid-abcd)" "$output"
+  assert_output_not_contains "Persistent Name" "$output"
+}
+
+test_elasticsearch_settings_failure() {
+  log_test "Elasticsearch - cluster settings request failure causes error"
+
+  start_path_mock_server 2 \
+    "/" 200 '{"cluster_name": "test-cluster", "cluster_uuid": "test-uuid-abcd", "version": {"number": "8.12.0"}}' \
+    "/_cluster/settings" 503 '{"error": "service unavailable"}'
+
+  local output
+  local exit_code=0
+
+  output=$(
+    ELASTIC_CLOUD_CONNECTED_MODE_API_URL="http://127.0.0.1:1" \
+    AUTOOPS_OTEL_URL="http://127.0.0.1:1" \
+    AUTOOPS_ES_URL="${MOCK_SERVER_URL}" \
+    bash "$CHECK_SCRIPT" 2>&1
+  ) || exit_code=$?
+
+  stop_mock_server
+
+  assert_exit_code 1 "$exit_code"
+  assert_output_contains "Cluster settings check failed (HTTP 503)" "$output"
+}
+
 # ---------------------------
 # Run all tests
 # ---------------------------
@@ -1283,6 +1390,10 @@ run_all_tests() {
   test_elasticsearch_version_exact_minimum
   test_elasticsearch_license_inactive
   test_elasticsearch_license_active
+  test_elasticsearch_display_name_transient
+  test_elasticsearch_display_name_persistent
+  test_elasticsearch_display_name_transient_wins
+  test_elasticsearch_settings_failure
   test_cloud_api_success
   test_cloud_api_connection_refused
   test_cloud_api_with_es_payload

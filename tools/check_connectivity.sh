@@ -387,19 +387,61 @@ check_elasticsearch() {
         cluster_uuid=$(grep -o '"cluster_uuid"[[:space:]]*:[[:space:]]*"[^"]*"' "${RESPONSE_FILE}" 2>/dev/null | head -1 | sed 's/.*:.*"\([^"]*\)".*/\1/')
         version=$(grep -o '"number"[[:space:]]*:[[:space:]]*"[^"]*"' "${RESPONSE_FILE}" 2>/dev/null | head -1 | sed 's/.*:.*"\([^"]*\)".*/\1/')
 
-        if [[ -n "$cluster_name" ]]; then
-          if [[ -n "$cluster_uuid" ]]; then
-            print_info "Cluster: $cluster_name ($cluster_uuid)"
-          else
-            print_info "Cluster: $cluster_name"
-          fi
-        fi
         if [[ -n "$version" ]]; then
           print_info "Version: $version"
           if ! version_at_least "$version" "7.17.0"; then
             print_error "Elasticsearch version $version is below the minimum required version 7.17.0"
             ((CHECKS_FAILED++))
             return 1
+          fi
+        fi
+
+        # Fetch cluster display name from settings
+        local settings_url="${AUTOOPS_ES_URL%/}/_cluster/settings?filter_path=*.cluster\.metadata\.display_name&flat_settings=true"
+        print_check "cluster settings at ${AUTOOPS_ES_URL%/}/_cluster/settings"
+
+        local settings_http_code
+        local settings_curl_exit
+        settings_http_code=$(curl -sS \
+          "${ca_opts[@]}" \
+          "${auth_opts[@]}" \
+          -w "%{http_code}" \
+          -o "${RESPONSE_FILE}" \
+          --connect-timeout 10 \
+          --max-time 30 \
+          "${settings_url}" 2>"${ERROR_FILE}") || settings_curl_exit=$?
+
+        settings_curl_exit=${settings_curl_exit:-0}
+
+        if [[ $settings_curl_exit -ne 0 ]]; then
+          local error_msg
+          error_msg=$(interpret_curl_error "$settings_curl_exit" "$(cat "${ERROR_FILE}" 2>/dev/null)" "$settings_url")
+          print_error "Cluster settings check failed: $error_msg"
+          if [[ "$PROXY_CONFIGURED" == "true" && "$settings_curl_exit" != "5" && "$settings_curl_exit" != "97" ]]; then
+            print_warning "A proxy is configured — this may be causing the connection failure"
+          fi
+          ((CHECKS_FAILED++))
+          return 1
+        fi
+
+        if [[ "$settings_http_code" != "200" ]]; then
+          print_error "Cluster settings check failed (HTTP $settings_http_code)"
+          ((CHECKS_FAILED++))
+          return 1
+        fi
+
+        local transient_block persistent_block transient_display persistent_display display_name
+        transient_block=$(grep -o '"transient"[[:space:]]*:[[:space:]]*{[^}]*}' "${RESPONSE_FILE}" 2>/dev/null | head -1)
+        persistent_block=$(grep -o '"persistent"[[:space:]]*:[[:space:]]*{[^}]*}' "${RESPONSE_FILE}" 2>/dev/null | head -1)
+        transient_display=$(echo "$transient_block" | grep -o '"cluster\.metadata\.display_name"[[:space:]]*:[[:space:]]*"[^"]*"' 2>/dev/null | head -1 | sed 's/.*:[[:space:]]*"\([^"]*\)".*/\1/')
+        persistent_display=$(echo "$persistent_block" | grep -o '"cluster\.metadata\.display_name"[[:space:]]*:[[:space:]]*"[^"]*"' 2>/dev/null | head -1 | sed 's/.*:[[:space:]]*"\([^"]*\)".*/\1/')
+        display_name="${transient_display:-${persistent_display:-$cluster_name}}"
+
+        if [[ -n "$display_name" ]]; then
+          if [[ -n "$cluster_uuid" ]]; then
+            print_info "Cluster: $display_name ($cluster_uuid)"
+          else
+            print_info "Cluster: $display_name"
           fi
         fi
 
@@ -470,7 +512,7 @@ check_elasticsearch() {
       fi
 
       ES_CLUSTER_ID="$cluster_uuid"
-      ES_CLUSTER_NAME="$cluster_name"
+      ES_CLUSTER_NAME="${display_name:-$cluster_name}"
       ES_VERSION="$version"
       ES_LICENSE_UID="$license_uid"
       ES_LICENSE_TYPE="$license_type"
