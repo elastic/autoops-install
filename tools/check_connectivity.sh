@@ -131,6 +131,12 @@ CHECKS_SKIPPED=0
 CHECKS_WARNED=0
 PROXY_CONFIGURED=false
 
+ES_CLUSTER_ID=""
+ES_CLUSTER_NAME=""
+ES_VERSION=""
+ES_LICENSE_UID=""
+ES_LICENSE_TYPE=""
+
 # ---------------------------
 # Version comparison
 # ---------------------------
@@ -263,147 +269,7 @@ check_proxy() {
 }
 
 # ---------------------------
-# Check 2a: Cloud API Connectivity
-# ---------------------------
-
-check_cloud_api() {
-  print_section "Elastic Cloud Connected Mode API"
-
-  local base_url="${ELASTIC_CLOUD_CONNECTED_MODE_API_URL:-}"
-  local using_default=""
-  if [[ -z "$base_url" ]]; then
-    base_url="https://api.elastic-cloud.com"
-    using_default=" (default)"
-  fi
-  local check_url="${base_url}/api/v1/cloud-connected/clusters"
-
-  print_info "URL: ${base_url}${using_default}"
-  print_check "connectivity to ${check_url}"
-
-  local http_code
-  local curl_exit
-
-  http_code=$(curl -sS -X POST \
-    -H "Content-Length: 0" \
-    -w "%{http_code}" \
-    -o /dev/null \
-    --connect-timeout 10 \
-    --max-time 30 \
-    "${check_url}" 2>"${ERROR_FILE}") || curl_exit=$?
-
-  curl_exit=${curl_exit:-0}
-
-  if [[ $curl_exit -ne 0 ]]; then
-    local error_msg
-    error_msg=$(interpret_curl_error "$curl_exit" "$(cat "${ERROR_FILE}" 2>/dev/null)" "$check_url")
-    print_error "$error_msg"
-    if [[ "$PROXY_CONFIGURED" == "true" && "$curl_exit" != "5" && "$curl_exit" != "97" ]]; then
-      print_warning "A proxy is configured — this may be causing the connection failure"
-    fi
-    ((CHECKS_FAILED++))
-    return 1
-  fi
-
-  # Any HTTP response means connectivity works (even 4xx/5xx)
-  if [[ "$DEBUG" == "true" ]]; then
-    print_success "Reachable. Can register to Elastic Cloud. (HTTP $http_code)"
-  else
-    print_success "Reachable. Can register to Elastic Cloud."
-  fi
-  ((CHECKS_PASSED++))
-  return 0
-}
-
-# ---------------------------
-# Check 2b: OTel Endpoint
-# ---------------------------
-
-check_otel() {
-  print_section "OTel Endpoint"
-
-  local otel_url="${AUTOOPS_OTEL_URL:-}"
-  local using_default=""
-  if [[ -z "$otel_url" ]]; then
-    otel_url="https://otel-auto-ops.ap-northeast-1.aws.svc.elastic.cloud"
-    using_default=" (default)"
-  fi
-  local check_url="${otel_url}/v1/logs"
-  local autoops_token="${AUTOOPS_TOKEN:-}"
-
-  print_info "URL: ${otel_url}${using_default}"
-  if [[ -n "$autoops_token" ]]; then
-    print_info "AUTOOPS_TOKEN: $(mask_value "$autoops_token")"
-  fi
-  print_check "connectivity to ${check_url}"
-
-  local http_code
-  local curl_exit
-
-  if [[ -n "$autoops_token" ]]; then
-    http_code=$(curl -sS -X POST \
-      -H "Content-Length: 0" \
-      -H "Authorization: AutoOpsToken ${autoops_token}" \
-      -w "%{http_code}" \
-      -o "${RESPONSE_FILE}" \
-      --connect-timeout 10 \
-      --max-time 30 \
-      "${check_url}" 2>"${ERROR_FILE}") || curl_exit=$?
-  else
-    http_code=$(curl -sS -X POST \
-      -H "Content-Length: 0" \
-      -w "%{http_code}" \
-      -o "${RESPONSE_FILE}" \
-      --connect-timeout 10 \
-      --max-time 30 \
-      "${check_url}" 2>"${ERROR_FILE}") || curl_exit=$?
-  fi
-
-  curl_exit=${curl_exit:-0}
-
-  if [[ $curl_exit -ne 0 ]]; then
-    local error_msg=$(interpret_curl_error "$curl_exit" "$(cat "${ERROR_FILE}" 2>/dev/null)" "$check_url")
-    print_error "$error_msg"
-    if [[ "$PROXY_CONFIGURED" == "true" && "$curl_exit" != "5" && "$curl_exit" != "97" ]]; then
-      print_warning "A proxy is configured — this may be causing the connection failure"
-    fi
-    ((CHECKS_FAILED++))
-    return 1
-  fi
-
-  if [[ -n "$autoops_token" ]]; then
-    if [[ "$http_code" == "415" ]]; then
-      if [[ "$DEBUG" == "true" ]]; then
-        print_success "Reachable and authenticated. Can ship metrics to Elastic Cloud. (HTTP $http_code)"
-      else
-        print_success "Reachable and authenticated. Can ship metrics to Elastic Cloud."
-      fi
-      ((CHECKS_PASSED++))
-      return 0
-    else
-      print_error "Reachable but authentication failed or unexpected response. (HTTP $http_code)"
-      ((CHECKS_FAILED++))
-      return 1
-    fi
-  else
-    local response_body=$(cat "${RESPONSE_FILE}" 2>/dev/null)
-    if [[ "$http_code" == "401" && "$response_body" == *'"code":16'* && "$response_body" == *'"message":"no auth provided"'* ]]; then
-      if [[ "$DEBUG" == "true" ]]; then
-        print_success "Reachable. Can ship metrics to Elastic Cloud. (HTTP $http_code)"
-      else
-        print_success "Reachable. Can ship metrics to Elastic Cloud."
-      fi
-      ((CHECKS_PASSED++))
-      return 0
-    else
-      print_error "Reachable but unexpected response (HTTP $http_code). Set AUTOOPS_TOKEN to validate authentication end-to-end."
-      ((CHECKS_FAILED++))
-      return 1
-    fi
-  fi
-}
-
-# ---------------------------
-# Check 3: Elasticsearch
+# Check 2: Elasticsearch
 # ---------------------------
 
 check_elasticsearch() {
@@ -515,12 +381,18 @@ check_elasticsearch() {
       # Try to extract cluster info from response
       if [[ -f "${RESPONSE_FILE}" ]]; then
         local cluster_name
+        local cluster_uuid
         local version
         cluster_name=$(grep -o '"cluster_name"[[:space:]]*:[[:space:]]*"[^"]*"' "${RESPONSE_FILE}" 2>/dev/null | head -1 | sed 's/.*:.*"\([^"]*\)".*/\1/')
+        cluster_uuid=$(grep -o '"cluster_uuid"[[:space:]]*:[[:space:]]*"[^"]*"' "${RESPONSE_FILE}" 2>/dev/null | head -1 | sed 's/.*:.*"\([^"]*\)".*/\1/')
         version=$(grep -o '"number"[[:space:]]*:[[:space:]]*"[^"]*"' "${RESPONSE_FILE}" 2>/dev/null | head -1 | sed 's/.*:.*"\([^"]*\)".*/\1/')
 
         if [[ -n "$cluster_name" ]]; then
-          print_info "Cluster: $cluster_name"
+          if [[ -n "$cluster_uuid" ]]; then
+            print_info "Cluster: $cluster_name ($cluster_uuid)"
+          else
+            print_info "Cluster: $cluster_name"
+          fi
         fi
         if [[ -n "$version" ]]; then
           print_info "Version: $version"
@@ -597,6 +469,12 @@ check_elasticsearch() {
         ((CHECKS_WARNED++))
       fi
 
+      ES_CLUSTER_ID="$cluster_uuid"
+      ES_CLUSTER_NAME="$cluster_name"
+      ES_VERSION="$version"
+      ES_LICENSE_UID="$license_uid"
+      ES_LICENSE_TYPE="$license_type"
+
       ((CHECKS_PASSED++))
       return 0
       ;;
@@ -620,6 +498,191 @@ check_elasticsearch() {
       return 0
       ;;
   esac
+}
+
+# ---------------------------
+# Check 3: Cloud API Connectivity
+# ---------------------------
+
+check_cloud_api() {
+  print_section "Elastic Cloud Connected Mode API"
+
+  local base_url="${ELASTIC_CLOUD_CONNECTED_MODE_API_URL:-}"
+  local using_default=""
+  if [[ -z "$base_url" ]]; then
+    base_url="https://api.elastic-cloud.com"
+    using_default=" (default)"
+  fi
+  local check_url="${base_url}/api/v1/cloud-connected/clusters"
+
+  print_info "URL: ${base_url}${using_default}"
+  print_check "connectivity to ${check_url}"
+
+  local api_key="${ELASTIC_CLOUD_CONNECTED_MODE_API_KEY:-}"
+  local http_code
+  local curl_exit
+
+  if [[ -n "$api_key" && -n "$ES_CLUSTER_NAME" ]]; then
+    local payload
+    payload=$(printf '{"self_managed_cluster":{"id":"%s","name":"%s","version":"%s"},"license":{"uid":"%s","type":"%s"}}' \
+      "$ES_CLUSTER_ID" "$ES_CLUSTER_NAME" "$ES_VERSION" "$ES_LICENSE_UID" "$ES_LICENSE_TYPE")
+
+    http_code=$(curl -sS -X POST \
+      -H "Content-Type: application/json" \
+      -H "Authorization: ApiKey ${api_key}" \
+      -d "$payload" \
+      -w "%{http_code}" \
+      -o "${RESPONSE_FILE}" \
+      --connect-timeout 10 \
+      --max-time 30 \
+      "${check_url}" 2>"${ERROR_FILE}") || curl_exit=$?
+  else
+    http_code=$(curl -sS -X POST \
+      -H "Content-Length: 0" \
+      -w "%{http_code}" \
+      -o /dev/null \
+      --connect-timeout 10 \
+      --max-time 30 \
+      "${check_url}" 2>"${ERROR_FILE}") || curl_exit=$?
+  fi
+
+  curl_exit=${curl_exit:-0}
+
+  if [[ $curl_exit -ne 0 ]]; then
+    local error_msg
+    error_msg=$(interpret_curl_error "$curl_exit" "$(cat "${ERROR_FILE}" 2>/dev/null)" "$check_url")
+    print_error "$error_msg"
+    if [[ "$PROXY_CONFIGURED" == "true" && "$curl_exit" != "5" && "$curl_exit" != "97" ]]; then
+      print_warning "A proxy is configured — this may be causing the connection failure"
+    fi
+    ((CHECKS_FAILED++))
+    return 1
+  fi
+
+  if [[ -n "$api_key" && -n "$ES_CLUSTER_NAME" ]]; then
+    # Payload was sent — validate registration succeeded
+    if [[ "$http_code" == "200" || "$http_code" == "201" ]]; then
+      if [[ "$DEBUG" == "true" ]]; then
+        print_success "Reachable. The cluster has been registered to Elastic Cloud. (HTTP $http_code)"
+      else
+        print_success "Reachable. The cluster has been registered to Elastic Cloud."
+      fi
+    else
+      local error_detail=""
+      if [[ -f "${RESPONSE_FILE}" ]]; then
+        local error_code error_message
+        error_code=$(grep -o '"code"[[:space:]]*:[[:space:]]*"[^"]*"' "${RESPONSE_FILE}" 2>/dev/null | head -1 | sed 's/.*:.*"\([^"]*\)".*/\1/')
+        error_message=$(grep -o '"message"[[:space:]]*:[[:space:]]*"[^"]*"' "${RESPONSE_FILE}" 2>/dev/null | head -1 | sed 's/.*:.*"\([^"]*\)".*/\1/')
+        if [[ -n "$error_code" && -n "$error_message" ]]; then
+          error_detail=" ($error_code: $error_message)"
+        elif [[ -n "$error_message" ]]; then
+          error_detail=" ($error_message)"
+        fi
+      fi
+      print_error "Registration failed (HTTP $http_code)${error_detail}."
+      ((CHECKS_FAILED++))
+      return 1
+    fi
+  else
+    # Any HTTP response means connectivity works (even 4xx/5xx)
+    if [[ "$DEBUG" == "true" ]]; then
+      print_success "Reachable. Can register to Elastic Cloud. (HTTP $http_code)"
+    else
+      print_success "Reachable. Can register to Elastic Cloud."
+    fi
+  fi
+  ((CHECKS_PASSED++))
+  return 0
+}
+
+# ---------------------------
+# Check 4: OTel Endpoint
+# ---------------------------
+
+check_otel() {
+  print_section "OTel Endpoint"
+
+  local otel_url="${AUTOOPS_OTEL_URL:-}"
+  local using_default=""
+  if [[ -z "$otel_url" ]]; then
+    otel_url="https://otel-auto-ops.ap-northeast-1.aws.svc.elastic.cloud"
+    using_default=" (default)"
+  fi
+  local check_url="${otel_url}/v1/logs"
+  local autoops_token="${AUTOOPS_TOKEN:-}"
+
+  print_info "URL: ${otel_url}${using_default}"
+  if [[ -n "$autoops_token" ]]; then
+    print_info "AUTOOPS_TOKEN: $(mask_value "$autoops_token")"
+  fi
+  print_check "connectivity to ${check_url}"
+
+  local http_code
+  local curl_exit
+
+  if [[ -n "$autoops_token" ]]; then
+    http_code=$(curl -sS -X POST \
+      -H "Content-Length: 0" \
+      -H "Authorization: AutoOpsToken ${autoops_token}" \
+      -w "%{http_code}" \
+      -o "${RESPONSE_FILE}" \
+      --connect-timeout 10 \
+      --max-time 30 \
+      "${check_url}" 2>"${ERROR_FILE}") || curl_exit=$?
+  else
+    http_code=$(curl -sS -X POST \
+      -H "Content-Length: 0" \
+      -w "%{http_code}" \
+      -o "${RESPONSE_FILE}" \
+      --connect-timeout 10 \
+      --max-time 30 \
+      "${check_url}" 2>"${ERROR_FILE}") || curl_exit=$?
+  fi
+
+  curl_exit=${curl_exit:-0}
+
+  if [[ $curl_exit -ne 0 ]]; then
+    local error_msg
+    error_msg=$(interpret_curl_error "$curl_exit" "$(cat "${ERROR_FILE}" 2>/dev/null)" "$check_url")
+    print_error "$error_msg"
+    if [[ "$PROXY_CONFIGURED" == "true" && "$curl_exit" != "5" && "$curl_exit" != "97" ]]; then
+      print_warning "A proxy is configured — this may be causing the connection failure"
+    fi
+    ((CHECKS_FAILED++))
+    return 1
+  fi
+
+  if [[ -n "$autoops_token" ]]; then
+    if [[ "$http_code" == "415" ]]; then
+      if [[ "$DEBUG" == "true" ]]; then
+        print_success "Reachable and authenticated. Can ship metrics to Elastic Cloud. (HTTP $http_code)"
+      else
+        print_success "Reachable and authenticated. Can ship metrics to Elastic Cloud."
+      fi
+      ((CHECKS_PASSED++))
+      return 0
+    else
+      print_error "Reachable but authentication failed or unexpected response. (HTTP $http_code)"
+      ((CHECKS_FAILED++))
+      return 1
+    fi
+  else
+    local response_body
+    response_body=$(cat "${RESPONSE_FILE}" 2>/dev/null)
+    if [[ "$http_code" == "401" && "$response_body" == *'"code":16'* && "$response_body" == *'"message":"no auth provided"'* ]]; then
+      if [[ "$DEBUG" == "true" ]]; then
+        print_success "Reachable. Can ship metrics to Elastic Cloud. (HTTP $http_code)"
+      else
+        print_success "Reachable. Can ship metrics to Elastic Cloud."
+      fi
+      ((CHECKS_PASSED++))
+      return 0
+    else
+      print_error "Reachable but unexpected response (HTTP $http_code). Set AUTOOPS_TOKEN to validate authentication end-to-end."
+      ((CHECKS_FAILED++))
+      return 1
+    fi
+  fi
 }
 
 # ---------------------------
@@ -664,9 +727,9 @@ main() {
   print_header
 
   check_proxy
+  check_elasticsearch
   check_cloud_api
   check_otel
-  check_elasticsearch
 
   print_summary
   exit $?

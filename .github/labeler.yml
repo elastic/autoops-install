@@ -1,6 +1,10 @@
 # This file is used by .github/workflows/pr-labeler.yml and its format depends on the version used there
 # https://github.com/actions/labeler#pull-request-labeler
 
+':README':
+  - changed-files:
+    - any-glob-to-any-file: README.md
+
 ':diagnostics':
   - changed-files:
     - any-glob-to-any-file: tools/**
