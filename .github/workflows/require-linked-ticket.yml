@@ -1,6 +1,8 @@
 # Fails the pull request when it is not linked to a GitHub issue.
-# Closes, Fixes, and Resolves close the issue on merge. Addresses links it and
-# leaves it open, so one ticket can cover many pull requests.
+# Any issue mention in the title or body counts, with or without a keyword
+# in front of it: #123, owner/repo#123, or a github.com/.../issues/123 URL.
+# Closes, Fixes, and Resolves also count (GitHub records them as closing
+# references) and close the issue on merge.
 # Add this job as a required status check on the default branch so merge is blocked.
 # The workflow runs from the default branch (pull_request_target) so a pull request
 # cannot edit the check to make itself pass.
@@ -74,9 +76,9 @@ jobs:
             }
 
             const text = `${pullRequest.title || ""}\n${pullRequest.body || ""}`;
-            const addresses = /\b(?:addresses|addressed|addressing)\s*:?\s*(?:https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/issues\/(\d+)|([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)#(\d+)|#(\d+))/gi;
+            const ticketMention = /https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/issues\/(\d+)\b|([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)#(\d+)\b|#(\d+)\b/gi;
             const missing = [];
-            for (const match of text.matchAll(addresses)) {
+            for (const match of text.matchAll(ticketMention)) {
               const owner = match[1] || match[4] || context.repo.owner;
               const name = match[2] || match[5] || context.repo.repo;
               const number = Number(match[3] || match[6] || match[7]);
@@ -105,13 +107,14 @@ jobs:
             }
 
             if (missing.length > 0) {
-              core.warning(`Ignored Addresses references that are not issues: ${missing.join(", ")}`);
+              core.warning(`Ignored ticket mentions that are not issues: ${missing.join(", ")}`);
             }
             if (linked.length === 0) {
               core.setFailed(
                 "This pull request is not linked to a ticket, so it cannot merge. " +
-                  "Add \"Addresses #123\" to link a ticket and leave it open, or " +
-                  "\"Closes #123\", \"Fixes #123\", or \"Resolves #123\" to link it and close it on merge. " +
+                  "Mention an issue in the title or description (#123, owner/repo#123, " +
+                  "or a GitHub issue URL). A keyword in front of it is optional. " +
+                  "\"Closes #123\", \"Fixes #123\", or \"Resolves #123\" also count and close the issue on merge. " +
                   "Linking an issue from the Development sidebar also counts."
               );
               return;
