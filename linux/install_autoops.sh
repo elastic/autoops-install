@@ -9,19 +9,17 @@
 # Usage example:
 # ./install_autoops.sh \
 #   --version 9.1.5 \
-#   --token abc123 \
 #   --ccm-api-key xyz789 \
 #   --otel-endpoint https://otel-url.co:4318 \
 #   --es-endpoint https://es-url.co:9200 \
 #   --es-username myuser \
-#   --es-password mypass \
-#   --temp-resource-id my-es-cluster
+#   --es-password mypass
 
 # ---------------------------
 # Configurable defaults
 # ---------------------------
 DOWNLOAD_URL="https://artifacts.elastic.co/downloads/beats/elastic-agent"
-VERSION="9.4.3"
+VERSION="9.4.9"
 DO_NOT_DELETE=false
 CACHE_DIR="${AUTOOPS_CACHE_DIR:-$HOME/.cache/elastic-agent-installer}"
 ELASTIC_CLOUD_CONNECTED_MODE_API_URL=""
@@ -29,8 +27,6 @@ ELASTIC_CLOUD_CONNECTED_MODE_API_URL=""
 # Required (populated by flags)
 AUTOOPS_ES_URL=""
 AUTOOPS_OTEL_URL=""
-AUTOOPS_TEMP_RESOURCE_ID=""
-AUTOOPS_TOKEN=""
 ELASTIC_CLOUD_CONNECTED_MODE_API_KEY=""
 
 # Optional creds (user/pass OR api key)
@@ -45,10 +41,8 @@ while [[ "$#" -gt 0 ]]; do
   case $1 in
     --es-endpoint) AUTOOPS_ES_URL="$2"; shift 2;;
     --otel-endpoint) AUTOOPS_OTEL_URL="$2"; shift 2;;
-    --token) AUTOOPS_TOKEN="$2"; shift 2;;
     --ccm-api-key) ELASTIC_CLOUD_CONNECTED_MODE_API_KEY="$2"; shift 2;;
     --ccm-api-url) ELASTIC_CLOUD_CONNECTED_MODE_API_URL="$2"; shift 2;;
-    --temp-resource-id) AUTOOPS_TEMP_RESOURCE_ID="$2"; shift 2;;
     --es-username) AUTOOPS_ES_USERNAME="$2"; shift 2;;
     --es-password) AUTOOPS_ES_PASSWORD="$2"; shift 2;;
     --es-api-key) AUTOOPS_ES_API_KEY="$2"; shift 2;;
@@ -65,10 +59,6 @@ done
 # ---------------------------
 if [[ -z "$VERSION" ]]; then
   echo "Error: --version required"; exit 1
-elif [[ -z "$AUTOOPS_TEMP_RESOURCE_ID" ]]; then
-  echo "Error: --temp-resource-id required"; exit 1
-elif [[ -z "$AUTOOPS_TOKEN" ]]; then
-  echo "Error: --token required"; exit 1
 elif [[ -z "$AUTOOPS_ES_URL" ]]; then
   echo "Error: --es-endpoint required"; exit 1
 elif [[ -z "$AUTOOPS_OTEL_URL" ]]; then
@@ -183,8 +173,6 @@ sudo tee /etc/systemd/system/elastic-agent.service.d/autoops-env.conf >/dev/null
 [Service]
 Environment="AUTOOPS_ES_URL=${AUTOOPS_ES_URL}"
 Environment="AUTOOPS_OTEL_URL=${AUTOOPS_OTEL_URL}"
-Environment="AUTOOPS_TOKEN=${AUTOOPS_TOKEN}"
-Environment="AUTOOPS_TEMP_RESOURCE_ID=${AUTOOPS_TEMP_RESOURCE_ID}"
 Environment="ELASTIC_CLOUD_CONNECTED_MODE_API_KEY=${ELASTIC_CLOUD_CONNECTED_MODE_API_KEY}"
 EOF
 
