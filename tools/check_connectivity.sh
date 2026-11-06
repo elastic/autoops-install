@@ -12,6 +12,7 @@
 #
 # Environment variables:
 #   ELASTIC_CLOUD_CONNECTED_MODE_API_URL - Cloud API URL (default: https://api.elastic-cloud.com)
+#   ELASTIC_CLOUD_CONNECTED_MODE_API_KEY - Cloud API key (used to authenticate to the OTel endpoint and register the cluster)
 #   AUTOOPS_OTEL_URL                     - OTel endpoint URL (default: https://otel-auto-ops.ap-northeast-1.aws.svc.elastic.cloud)
 #   AUTOOPS_ES_URL                       - Elasticsearch URL (optional)
 #   AUTOOPS_ES_USERNAME                  - Elasticsearch username (for Basic auth)
@@ -655,21 +656,21 @@ check_otel() {
     using_default=" (default)"
   fi
   local check_url="${otel_url}/v1/logs"
-  local autoops_token="${AUTOOPS_TOKEN:-}"
+  local api_key="${ELASTIC_CLOUD_CONNECTED_MODE_API_KEY:-}"
 
   print_info "URL: ${otel_url}${using_default}"
-  if [[ -n "$autoops_token" ]]; then
-    print_info "AUTOOPS_TOKEN: $(mask_value "$autoops_token")"
+  if [[ -n "$api_key" ]]; then
+    print_info "ELASTIC_CLOUD_CONNECTED_MODE_API_KEY: $(mask_value "$api_key")"
   fi
   print_check "connectivity to ${check_url}"
 
   local http_code
   local curl_exit
 
-  if [[ -n "$autoops_token" ]]; then
+  if [[ -n "$api_key" ]]; then
     http_code=$(curl -sS -X POST \
       -H "Content-Length: 0" \
-      -H "Authorization: AutoOpsToken ${autoops_token}" \
+      -H "Authorization: ApiKey ${api_key}" \
       -w "%{http_code}" \
       -o "${RESPONSE_FILE}" \
       --connect-timeout 10 \
@@ -698,7 +699,7 @@ check_otel() {
     return 1
   fi
 
-  if [[ -n "$autoops_token" ]]; then
+  if [[ -n "$api_key" ]]; then
     if [[ "$http_code" == "415" ]]; then
       if [[ "$DEBUG" == "true" ]]; then
         print_success "Reachable and authenticated. Can ship metrics to Elastic Cloud. (HTTP $http_code)"
@@ -724,7 +725,7 @@ check_otel() {
       ((CHECKS_PASSED++))
       return 0
     else
-      print_error "Reachable but unexpected response (HTTP $http_code). Set AUTOOPS_TOKEN to validate authentication end-to-end."
+      print_error "Reachable but unexpected response (HTTP $http_code). Set ELASTIC_CLOUD_CONNECTED_MODE_API_KEY to validate authentication end-to-end."
       ((CHECKS_FAILED++))
       return 1
     fi

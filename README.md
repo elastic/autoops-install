@@ -10,7 +10,6 @@ Use the `k8s/autoops_agent_deployment.yaml` deployment configuration to install 
 
 | Parameter | Optional | Description |
 |-----------|----------|----------|
-| `autoops-token` | No  | The AutoOps Token.  |
 | `autoops-otel-endpoint` | No  | The URL where OTel data is delivered for AutoOps. |
 | `ccm-api-key` | No  | The Elastic Cloud API Key that allows the cluster to be registered. |
 | `ccm-api-url` | Yes | The Elastic Cloud endpoint that allows the cluster to be registered. |
@@ -24,7 +23,6 @@ Use the `k8s/autoops_agent_deployment.yaml` deployment configuration to install 
 
 ```sh
 kubectl create secret generic autoops-secret \
-  --from-literal=autoops-token="<Provided by AutoOps installation wizard>" \
   --from-literal=temp-resource-id="<Provided by AutoOps installation wizard>" \
   --from-literal=autoops-otel-url="<Provided by AutoOps installation wizard>" \
   --from-literal=cloud-connected-mode-api-key="<Provided by AutoOps installation wizard>" \
@@ -39,7 +37,6 @@ kubectl apply -f https://raw.githubusercontent.com/elastic/autoops-install/main/
 
 ```sh
 kubectl create secret generic autoops-secret \
-  --from-literal=autoops-token="<Provided by AutoOps installation wizard>" \
   --from-literal=temp-resource-id="<Provided by AutoOps installation wizard>" \
   --from-literal=autoops-otel-url="<Provided by AutoOps installation wizard>" \
   --from-literal=cloud-connected-mode-api-key="<Provided by AutoOps installation wizard>" \
@@ -57,7 +54,6 @@ Use the `install_autoops.sh` script in order to install a new agent on your Linu
 
 | Parameter | Optional | Description |
 |-----------|----------|----------|
-| `token`     | No  | The AutoOps Token.  |
 | `otel-endpoint` | No  | The URL where OTel data is delivered for AutoOps. |
 | `ccm-api-key` | No  | The Elastic Cloud API Key that allows the cluster to be registered. |
 | `ccm-api-url` | Yes | The Elastic Cloud endpoint that allows the cluster to be registered. |
@@ -72,7 +68,6 @@ Use the `install_autoops.sh` script in order to install a new agent on your Linu
 
 ```sh
 ./install_autoops.sh \
-  --token "<Provided by AutoOps installation wizard>" \
   --otel-endpoint "<Provided by AutoOps installation wizard>" \
   --ccm-api-key "<Provided by AutoOps installation wizard>" \
   --ccm-api-url "<Provided by AutoOps installation wizard if needed>" \
@@ -86,7 +81,6 @@ Use the `install_autoops.sh` script in order to install a new agent on your Linu
 
 ```sh
 ./install_autoops.sh \
-  --token "<Provided by AutoOps installation wizard>" \
   --otel-endpoint "<Provided by AutoOps installation wizard>" \
   --ccm-api-key "<Provided by AutoOps installation wizard>" \
   --ccm-api-url "<Provided by AutoOps installation wizard if needed>" \
@@ -123,7 +117,7 @@ The `tools/check_connectivity.sh` script verifies network connectivity and confi
 | `AUTOOPS_ES_CA` | No | - | Path to CA certificate file |
 | `AUTOOPS_OTEL_URL` | No | `https://otel-auto-ops.ap-northeast-1.aws.svc.elastic.cloud` | OTel endpoint URL |
 | `ELASTIC_CLOUD_CONNECTED_MODE_API_URL` | No | `https://api.elastic-cloud.com` | Cloud API URL |
-| `ELASTIC_CLOUD_CONNECTED_MODE_API_KEY` | No | - | Cloud API key; when set alongside `AUTOOPS_ES_URL`, registers the cluster with Elastic Cloud |
+| `ELASTIC_CLOUD_CONNECTED_MODE_API_KEY` | No | - | Cloud API key; sent as `Authorization: ApiKey` to the OTel endpoint and, when set alongside `AUTOOPS_ES_URL`, used to register the cluster with Elastic Cloud |
 
 ### Example with Elasticsearch
 
