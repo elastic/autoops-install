@@ -418,13 +418,13 @@ test_cloud_api_with_es_payload() {
     "/_cluster/settings" 200 '{}' \
     "/_license" 200 '{"license": {"status": "active", "type": "basic", "uid": "test-uid-1234"}}' \
     "/api/v1/cloud-connected/clusters" 200 '{"ok": true}' \
-    "/v1/logs" 401 '{"code":16,"message":"no auth provided"}'
+    "/v1/logs" 415 ''
 
   local output
   local exit_code=0
 
   output=$(
-    unset AUTOOPS_TOKEN
+    unset ELASTIC_CLOUD_CONNECTED_MODE_API_KEY
     ELASTIC_CLOUD_CONNECTED_MODE_API_URL="${MOCK_SERVER_URL}" \
     AUTOOPS_OTEL_URL="${MOCK_SERVER_URL}" \
     AUTOOPS_ES_URL="${MOCK_SERVER_URL}" \
@@ -473,7 +473,7 @@ test_otel_success() {
   local exit_code=0
 
   output=$(
-    unset AUTOOPS_TOKEN
+    unset ELASTIC_CLOUD_CONNECTED_MODE_API_KEY
     ELASTIC_CLOUD_CONNECTED_MODE_API_URL="http://127.0.0.1:1" \
     AUTOOPS_OTEL_URL="${MOCK_SERVER_URL}" \
     bash "$CHECK_SCRIPT" 2>&1
@@ -495,7 +495,7 @@ test_otel_no_token_unexpected_response() {
   local exit_code=0
 
   output=$(
-    unset AUTOOPS_TOKEN
+    unset ELASTIC_CLOUD_CONNECTED_MODE_API_KEY
     ELASTIC_CLOUD_CONNECTED_MODE_API_URL="http://127.0.0.1:1" \
     AUTOOPS_OTEL_URL="${MOCK_SERVER_URL}" \
     bash "$CHECK_SCRIPT" 2>&1
@@ -504,11 +504,11 @@ test_otel_no_token_unexpected_response() {
   stop_mock_server
 
   assert_output_contains "Reachable but unexpected response (HTTP 200)" "$output"
-  assert_output_contains "Set AUTOOPS_TOKEN to validate authentication end-to-end" "$output"
+  assert_output_contains "Set ELASTIC_CLOUD_CONNECTED_MODE_API_KEY to validate authentication end-to-end" "$output"
 }
 
 test_otel_with_token_success() {
-  log_test "OTel endpoint - authenticated success with AUTOOPS_TOKEN (HTTP 415)"
+  log_test "OTel endpoint - authenticated success with ELASTIC_CLOUD_CONNECTED_MODE_API_KEY (HTTP 415)"
 
   start_mock_server "415" ''
 
@@ -518,7 +518,7 @@ test_otel_with_token_success() {
   output=$(
     ELASTIC_CLOUD_CONNECTED_MODE_API_URL="http://127.0.0.1:1" \
     AUTOOPS_OTEL_URL="${MOCK_SERVER_URL}" \
-    AUTOOPS_TOKEN="my-test-token" \
+    ELASTIC_CLOUD_CONNECTED_MODE_API_KEY="my-test-token" \
     bash "$CHECK_SCRIPT" 2>&1
   ) || exit_code=$?
 
@@ -539,7 +539,7 @@ test_otel_with_token_auth_failure() {
   output=$(
     ELASTIC_CLOUD_CONNECTED_MODE_API_URL="http://127.0.0.1:1" \
     AUTOOPS_OTEL_URL="${MOCK_SERVER_URL}" \
-    AUTOOPS_TOKEN="bad-token" \
+    ELASTIC_CLOUD_CONNECTED_MODE_API_KEY="bad-token" \
     bash "$CHECK_SCRIPT" 2>&1
   ) || exit_code=$?
 
@@ -549,7 +549,7 @@ test_otel_with_token_auth_failure() {
 }
 
 test_otel_token_masked_in_output() {
-  log_test "OTel endpoint - AUTOOPS_TOKEN value is masked in output"
+  log_test "OTel endpoint - ELASTIC_CLOUD_CONNECTED_MODE_API_KEY value is masked in output"
 
   start_mock_server "415" ''
 
@@ -559,13 +559,13 @@ test_otel_token_masked_in_output() {
   output=$(
     ELASTIC_CLOUD_CONNECTED_MODE_API_URL="http://127.0.0.1:1" \
     AUTOOPS_OTEL_URL="${MOCK_SERVER_URL}" \
-    AUTOOPS_TOKEN="super-secret-token" \
+    ELASTIC_CLOUD_CONNECTED_MODE_API_KEY="super-secret-token" \
     bash "$CHECK_SCRIPT" 2>&1
   ) || exit_code=$?
 
   stop_mock_server
 
-  assert_output_contains "AUTOOPS_TOKEN:" "$output"
+  assert_output_contains "ELASTIC_CLOUD_CONNECTED_MODE_API_KEY:" "$output"
   assert_output_not_contains "super-secret-token" "$output"
   assert_output_contains "REDACTED" "$output"
 }
@@ -703,7 +703,7 @@ test_elasticsearch_api_key_with_colon() {
   local exit_code=0
 
   output=$(
-    unset AUTOOPS_TOKEN
+    unset ELASTIC_CLOUD_CONNECTED_MODE_API_KEY
     ELASTIC_CLOUD_CONNECTED_MODE_API_URL="${MOCK_SERVER_URL}" \
     AUTOOPS_OTEL_URL="${MOCK_SERVER_URL}" \
     AUTOOPS_ES_URL="${MOCK_SERVER_URL}" \
@@ -994,7 +994,7 @@ test_summary_all_pass() {
   local exit_code=0
 
   output=$(
-    unset AUTOOPS_TOKEN
+    unset ELASTIC_CLOUD_CONNECTED_MODE_API_KEY
     ELASTIC_CLOUD_CONNECTED_MODE_API_URL="${MOCK_SERVER_URL}" \
     AUTOOPS_OTEL_URL="${MOCK_SERVER_URL}" \
     AUTOOPS_ES_URL="${MOCK_SERVER_URL}" \
@@ -1036,7 +1036,7 @@ test_summary_skipped() {
   local exit_code=0
 
   output=$(
-    unset AUTOOPS_TOKEN
+    unset ELASTIC_CLOUD_CONNECTED_MODE_API_KEY
     ELASTIC_CLOUD_CONNECTED_MODE_API_URL="${MOCK_SERVER_URL}" \
     AUTOOPS_OTEL_URL="${MOCK_SERVER_URL}" \
     bash "$CHECK_SCRIPT" 2>&1
@@ -1099,7 +1099,7 @@ test_debug_flag_otel_shows_http_code() {
   local exit_code=0
 
   output=$(
-    unset AUTOOPS_TOKEN
+    unset ELASTIC_CLOUD_CONNECTED_MODE_API_KEY
     ELASTIC_CLOUD_CONNECTED_MODE_API_URL="http://127.0.0.1:1" \
     AUTOOPS_OTEL_URL="${MOCK_SERVER_URL}" \
     bash "$CHECK_SCRIPT" --debug 2>&1
@@ -1111,7 +1111,7 @@ test_debug_flag_otel_shows_http_code() {
 }
 
 test_debug_flag_otel_shows_http_code_with_token() {
-  log_test "Debug flag - OTel shows HTTP 415 code with --debug and AUTOOPS_TOKEN"
+  log_test "Debug flag - OTel shows HTTP 415 code with --debug and ELASTIC_CLOUD_CONNECTED_MODE_API_KEY"
 
   start_mock_server "415" ''
 
@@ -1121,7 +1121,7 @@ test_debug_flag_otel_shows_http_code_with_token() {
   output=$(
     ELASTIC_CLOUD_CONNECTED_MODE_API_URL="http://127.0.0.1:1" \
     AUTOOPS_OTEL_URL="${MOCK_SERVER_URL}" \
-    AUTOOPS_TOKEN="my-test-token" \
+    ELASTIC_CLOUD_CONNECTED_MODE_API_KEY="my-test-token" \
     bash "$CHECK_SCRIPT" --debug 2>&1
   ) || exit_code=$?
 
