@@ -1,0 +1,122 @@
+# Fails the pull request when it is not linked to a GitHub issue.
+# Any issue mention in the title or body counts, with or without a keyword
+# in front of it: #123, owner/repo#123, or a github.com/.../issues/123 URL.
+# Closes, Fixes, and Resolves also count (GitHub records them as closing
+# references) and close the issue on merge.
+# Add this job as a required status check on the default branch so merge is blocked.
+# The workflow runs from the default branch (pull_request_target) so a pull request
+# cannot edit the check to make itself pass.
+
+name: Require linked ticket
+
+on:
+  pull_request_target:
+    types: [opened, edited, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+concurrency:
+  group: require-linked-ticket-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  require-linked-ticket:
+    name: require-linked-ticket
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require a linked ticket
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const head = context.payload.pull_request.head.ref;
+            const login = context.payload.pull_request.user?.login || "";
+            const exemptBranch = [
+              /^renovate\//,
+              /^dependabot\//,
+              /^changelog-bot\//,
+              /^release-notes-bot\//,
+              /^snyk-(fix|upgrade)-/,
+            ];
+            const exemptAuthor = new Set(["snyk-io[bot]", "app/snyk-io", "prodsecmachine"]);
+            if (exemptBranch.some((pattern) => pattern.test(head)) || exemptAuthor.has(login)) {
+              core.info(`Automated pull request ${login} (${head}) does not need a linked ticket.`);
+              return;
+            }
+
+            const query = `
+              query($owner: String!, $name: String!, $number: Int!) {
+                repository(owner: $owner, name: $name) {
+                  pullRequest(number: $number) {
+                    title
+                    body
+                    closingIssuesReferences(first: 20) {
+                      nodes { number }
+                    }
+                  }
+                }
+              }
+            `;
+            const result = await github.graphql(query, {
+              owner: context.repo.owner,
+              name: context.repo.repo,
+              number: context.payload.pull_request.number,
+            });
+            const pullRequest = result.repository.pullRequest;
+            const linked = [];
+            const seen = new Set();
+            for (const issue of pullRequest.closingIssuesReferences.nodes || []) {
+              const label = `#${issue.number}`;
+              if (!seen.has(label)) {
+                seen.add(label);
+                linked.push(label);
+              }
+            }
+
+            const text = `${pullRequest.title || ""}\n${pullRequest.body || ""}`;
+            const ticketMention = /https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/issues\/(\d+)\b|([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)#(\d+)\b|#(\d+)\b/gi;
+            const missing = [];
+            for (const match of text.matchAll(ticketMention)) {
+              const owner = match[1] || match[4] || context.repo.owner;
+              const name = match[2] || match[5] || context.repo.repo;
+              const number = Number(match[3] || match[6] || match[7]);
+              const label = owner === context.repo.owner && name === context.repo.repo
+                ? `#${number}`
+                : `${owner}/${name}#${number}`;
+              if (seen.has(label)) {
+                continue;
+              }
+              seen.add(label);
+              const found = await github.graphql(`
+                query($owner: String!, $name: String!, $number: Int!) {
+                  repository(owner: $owner, name: $name) {
+                    issue(number: $number) { number }
+                  }
+                }
+              `, { owner, name, number }).then(
+                (data) => Boolean(data.repository && data.repository.issue),
+                () => false,
+              );
+              if (found) {
+                linked.push(label);
+              } else {
+                missing.push(label);
+              }
+            }
+
+            if (missing.length > 0) {
+              core.warning(`Ignored ticket mentions that are not issues: ${missing.join(", ")}`);
+            }
+            if (linked.length === 0) {
+              core.setFailed(
+                "This pull request is not linked to a ticket, so it cannot merge. " +
+                  "Mention an issue in the title or description (#123, owner/repo#123, " +
+                  "or a GitHub issue URL). A keyword in front of it is optional. " +
+                  "\"Closes #123\", \"Fixes #123\", or \"Resolves #123\" also count and close the issue on merge. " +
+                  "Linking an issue from the Development sidebar also counts."
+              );
+              return;
+            }
+            core.info(`Linked tickets: ${linked.join(", ")}`);
