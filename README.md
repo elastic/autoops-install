@@ -91,11 +91,11 @@ Use the `install_autoops.sh` script in order to install a new agent on your Linu
 
 # Upgrading an installed agent
 
-Use `upgrade/upgrade_autoops.sh` to move an installed agent to a newer version without reinstalling it. Your credentials and settings stay as they are; only the agent version changes.
+Use `upgrade/upgrade_autoops.sh` to move an installed agent to a newer version without reinstalling it. Your credentials and settings stay as they are. The agent version changes, and the [recommended memory settings](#recommended-settings) are added when they are missing.
 
 | Install type | What the script does |
 |--------------|----------------------|
-| Kubernetes (`k8s/autoops_agent_deployment.yaml`) | Changes the image of the agent container and waits for the rollout. The manifest is not re-applied, so the Secret, environment, resources and volumes are untouched. |
+| Kubernetes (`k8s/autoops_agent_deployment.yaml`) | Changes the image of the agent container and waits for the rollout. The manifest is not re-applied, so the Secret, your environment variables, your resources and volumes are untouched. |
 | Docker / Podman | Recreates the container on the new image with the same environment, command, restart policy, memory and CPU limits, network, user, volumes, `--add-host` entries and published ports. The old container is kept as `<name>.autoops-backup`. |
 | ECK (`AutoOpsAgentPolicy`) | Changes nothing. Prints the `kubectl patch` command that sets `spec.version`. |
 | Helm | Changes nothing. Prints the `helm upgrade` command to use. |
@@ -123,6 +123,25 @@ If the new version does not become ready (Kubernetes) or does not stay up (Docke
 ./upgrade/upgrade_autoops.sh --rollback
 ```
 
+### Recommended settings
+
+An upgrade also brings in the recommended memory settings when they are missing. The dry run lists exactly what would be added.
+
+| Setting | What the script does |
+|---------|----------------------|
+| `GOMEMLIMIT` | Added at 80% of the agent's memory limit when the agent has a memory limit and no `GOMEMLIMIT`. A `GOMEMLIMIT` you set yourself is never changed. |
+| Memory limit | Not set on its own, because the right size depends on the monitored cluster. Pass `--memory-limit <size>` (for example `512Mi`) to set it; `GOMEMLIMIT` then follows it. On Kubernetes the memory request is set to the same value. |
+| Scrape periods, send queue | Not changed by the script. They are part of the configuration inside the agent image, so the new version brings its own. A configuration you mounted yourself is left as it is. |
+
+These settings are also applied when the agent is already on the requested version, so you can run the script only to add them. Use `--no-defaults` to change the version and nothing else.
+
+```sh
+# Set a 512Mi memory limit and the matching GOMEMLIMIT while upgrading
+./upgrade/upgrade_autoops.sh --version 9.4.9 --memory-limit 512Mi
+```
+
+A memory limit makes the container runtime restart the agent when it uses more than the limit, which shows as a short gap in the data. `GOMEMLIMIT` makes that less likely, because the agent frees memory before reaching the limit.
+
 ### Parameters
 
 | Parameter | Applies to | Description |
@@ -133,6 +152,8 @@ If the new version does not become ready (Kubernetes) or does not stay up (Docke
 | `--rollback` | All | Go back to the version that ran before the last upgrade. |
 | `--yes` | All | Do not ask for confirmation. Required when there is no terminal. |
 | `--allow-downgrade` | All | Allow `--version` to be older than the installed version. |
+| `--no-defaults` | All | Change the version only; do not add recommended settings. |
+| `--memory-limit` | Kubernetes, Docker / Podman | Set this memory limit on the agent, for example `512Mi` or `1Gi`. |
 | `--namespace`, `--all-namespaces` | Kubernetes | Where to look for the Deployment. Defaults to the current namespace. |
 | `--context` | Kubernetes | The `kubectl` context to use. |
 | `--deployment` | Kubernetes | The Deployment name, if it is not `autoops-elastic-agent`. |

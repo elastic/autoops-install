@@ -639,6 +639,229 @@ assert_called "podman run --detach --name autoops-agent"
 assert_not_called "docker run"
 
 # ---------------------------
+# Recommended defaults
+# ---------------------------
+
+IMG='docker.elastic.co/elastic-agent/elastic-otel-collector-wolfi'
+# name=image=memory limit=env names
+K8S_LIMIT="default|autoops-elastic-agent|||autoops-elastic-agent=${IMG}:9.2.0=400Mi=AUTOOPS_ES_URL,AUTOOPS_OTEL_URL,;"
+K8S_LIMIT_GOMEMLIMIT="default|autoops-elastic-agent|||autoops-elastic-agent=${IMG}:9.2.0=1Gi=AUTOOPS_ES_URL,GOMEMLIMIT,;"
+K8S_NO_LIMIT="default|autoops-elastic-agent|||autoops-elastic-agent=${IMG}:9.2.0==AUTOOPS_ES_URL,MY_GOMEMLIMIT,;"
+K8S_ODD_LIMIT="default|autoops-elastic-agent|||autoops-elastic-agent=${IMG}:9.2.0=1.5Gi=AUTOOPS_ES_URL,;"
+
+DOCKER_NO_GOMEMLIMIT="${DOCKER_INSPECT/env=GOMEMLIMIT=720MiB
+/}"
+DOCKER_NO_LIMIT="${DOCKER_NO_GOMEMLIMIT/memory=943718400
+memswap=1887436800/memory=0
+memswap=0}"
+DOCKER_NO_LIMIT_OWN_GOMEMLIMIT="${DOCKER_INSPECT/memory=943718400
+memswap=1887436800/memory=0
+memswap=0}"
+
+log_test "defaults: --memory-limit must be a size in Mi or Gi"
+run_upgrade --memory-limit 512
+assert_exit_code 2
+assert_output_contains "--memory-limit must look like"
+
+log_test "defaults: --memory-limit cannot be combined with --no-defaults"
+run_upgrade --memory-limit 512Mi --no-defaults
+assert_exit_code 2
+
+log_test "defaults: --memory-limit cannot be combined with --rollback"
+run_upgrade --memory-limit 512Mi --rollback
+assert_exit_code 2
+
+log_test "defaults k8s: GOMEMLIMIT is added at 80% of the memory limit, in one patch with the image"
+MOCK_K8S_DEPLOYMENTS="$K8S_LIMIT"
+run_upgrade --version 9.4.9 --yes
+assert_exit_code 0
+assert_output_contains "GOMEMLIMIT: 320MiB (80% of the memory limit; it was not set)"
+assert_called "kubectl --namespace default patch deployment/autoops-elastic-agent --type strategic --patch"
+assert_called "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"autoops-elastic-agent\",\"image\":\"${IMG}:9.4.9\",\"env\":[{\"name\":\"GOMEMLIMIT\",\"value\":\"320MiB\"}]}]}}}}"
+assert_not_called "set image"
+assert_not_called "\"resources\""
+assert_called "rollout status"
+
+log_test "defaults k8s: dry run shows the setting and changes nothing"
+MOCK_K8S_DEPLOYMENTS="$K8S_LIMIT"
+run_upgrade --version 9.4.9 --dry-run
+assert_exit_code 0
+assert_output_contains "GOMEMLIMIT: 320MiB"
+assert_not_called " patch "
+assert_not_called "set image"
+
+log_test "defaults k8s: a GOMEMLIMIT you set is never changed"
+MOCK_K8S_DEPLOYMENTS="$K8S_LIMIT_GOMEMLIMIT"
+run_upgrade --version 9.4.9 --yes
+assert_exit_code 0
+assert_output_contains "Recommended settings: nothing to add."
+assert_called "set image"
+assert_not_called " patch "
+
+log_test "defaults k8s: without a memory limit, GOMEMLIMIT is not added"
+MOCK_K8S_DEPLOYMENTS="$K8S_NO_LIMIT"
+run_upgrade --version 9.4.9 --yes
+assert_exit_code 0
+assert_output_contains "GOMEMLIMIT: not added, because the agent has no memory limit"
+assert_output_contains "--memory-limit 512Mi"
+assert_called "set image"
+assert_not_called " patch "
+
+log_test "defaults k8s: --memory-limit sets limit, request and GOMEMLIMIT"
+MOCK_K8S_DEPLOYMENTS="$K8S_NO_LIMIT"
+run_upgrade --version 9.4.9 --yes --memory-limit 512Mi
+assert_exit_code 0
+assert_output_contains "Memory limit: 512Mi (was: not set)"
+assert_called "\"env\":[{\"name\":\"GOMEMLIMIT\",\"value\":\"409MiB\"}]"
+assert_called "\"resources\":{\"limits\":{\"memory\":\"512Mi\"},\"requests\":{\"memory\":\"512Mi\"}}"
+assert_not_called "set image"
+
+log_test "defaults k8s: --memory-limit keeps a GOMEMLIMIT you set, with a note"
+MOCK_K8S_DEPLOYMENTS="$K8S_LIMIT_GOMEMLIMIT"
+run_upgrade --version 9.4.9 --yes --memory-limit 2Gi
+assert_exit_code 0
+assert_output_contains "Memory limit: 2Gi (was: 1Gi)"
+assert_output_contains "GOMEMLIMIT: kept as you set it"
+assert_called "\"limits\":{\"memory\":\"2Gi\"}"
+assert_not_called "\"name\":\"GOMEMLIMIT\""
+
+log_test "defaults k8s: --memory-limit equal to the current limit changes no resources"
+MOCK_K8S_DEPLOYMENTS="$K8S_LIMIT"
+run_upgrade --version 9.4.9 --yes --memory-limit 400Mi
+assert_exit_code 0
+assert_called "\"value\":\"320MiB\""
+assert_not_called "\"resources\""
+
+log_test "defaults k8s: --no-defaults changes the version only"
+MOCK_K8S_DEPLOYMENTS="$K8S_LIMIT"
+run_upgrade --version 9.4.9 --yes --no-defaults
+assert_exit_code 0
+assert_output_contains "Recommended settings: skipped (--no-defaults)."
+assert_called "set image"
+assert_not_called " patch "
+
+log_test "defaults k8s: settings are added even when the version is already current"
+MOCK_K8S_DEPLOYMENTS="$K8S_LIMIT"
+run_upgrade --version 9.2.0 --yes
+assert_exit_code 0
+assert_output_contains "Image next: unchanged (already on 9.2.0)"
+assert_called "\"image\":\"${IMG}:9.2.0\",\"env\":[{\"name\":\"GOMEMLIMIT\",\"value\":\"320MiB\"}]"
+assert_output_contains "Updated the settings of Deployment autoops-elastic-agent"
+
+log_test "defaults k8s: current version and nothing to add is a no-op"
+MOCK_K8S_DEPLOYMENTS="$K8S_LIMIT_GOMEMLIMIT"
+run_upgrade --version 9.2.0 --yes
+assert_exit_code 0
+assert_output_contains "Nothing to do"
+assert_not_called " patch "
+assert_not_called "set image"
+
+log_test "defaults k8s: a memory limit in an unknown form is left alone"
+MOCK_K8S_DEPLOYMENTS="$K8S_ODD_LIMIT"
+run_upgrade --version 9.4.9 --yes
+assert_exit_code 0
+assert_output_contains "is in a form this script does not read"
+assert_called "set image"
+assert_not_called " patch "
+
+log_test "defaults k8s: a failed rollout after a patch restores the previous version"
+MOCK_K8S_DEPLOYMENTS="$K8S_LIMIT"
+MOCK_K8S_ROLLOUT_RC=1
+run_upgrade --version 9.4.9 --yes
+assert_exit_code 1
+assert_call_order " patch " "rollout undo deployment/autoops-elastic-agent"
+
+log_test "defaults docker: GOMEMLIMIT is added at 80% of the memory limit"
+MOCK_DOCKER_PS="$DOCKER_PS"
+MOCK_INSPECT="$DOCKER_NO_GOMEMLIMIT"
+MOCK_IMAGE_INSPECT="$DOCKER_IMAGE_INSPECT"
+run_upgrade --version 9.4.9 --yes --settle-seconds 0
+assert_exit_code 0
+assert_output_contains "GOMEMLIMIT: 720MiB (80% of the memory limit; it was not set)"
+assert_called "--memory 943718400 --memory-swap 1887436800"
+if [[ -f "$MOCK_ENV_COPY" && "$(grep -c '^GOMEMLIMIT=720MiB$' "$MOCK_ENV_COPY")" -eq 1 ]]; then
+  log_pass "Env file has GOMEMLIMIT=720MiB once"
+else
+  log_fail "Env file should have GOMEMLIMIT=720MiB once"
+fi
+
+log_test "defaults docker: a GOMEMLIMIT you set is never changed"
+MOCK_DOCKER_PS="$DOCKER_PS"
+MOCK_INSPECT="$DOCKER_INSPECT"
+MOCK_IMAGE_INSPECT="$DOCKER_IMAGE_INSPECT"
+run_upgrade --version 9.4.9 --yes --settle-seconds 0 --memory-limit 2Gi
+assert_exit_code 0
+assert_output_contains "GOMEMLIMIT: kept as you set it"
+assert_called "--memory 2147483648"
+assert_not_called "--memory-swap"
+if [[ -f "$MOCK_ENV_COPY" && "$(grep '^GOMEMLIMIT=' "$MOCK_ENV_COPY")" == "GOMEMLIMIT=720MiB" ]]; then
+  log_pass "Env file keeps the user's GOMEMLIMIT"
+else
+  log_fail "Env file should keep the user's GOMEMLIMIT"
+fi
+
+log_test "defaults docker: without a memory limit, nothing is added"
+MOCK_DOCKER_PS="$DOCKER_PS"
+MOCK_INSPECT="$DOCKER_NO_LIMIT"
+MOCK_IMAGE_INSPECT="$DOCKER_IMAGE_INSPECT"
+run_upgrade --version 9.4.9 --yes --settle-seconds 0
+assert_exit_code 0
+assert_output_contains "GOMEMLIMIT: not added, because the agent has no memory limit"
+assert_not_called "--memory"
+if [[ -f "$MOCK_ENV_COPY" ]] && ! grep -q '^GOMEMLIMIT=' "$MOCK_ENV_COPY"; then
+  log_pass "Env file has no GOMEMLIMIT"
+else
+  log_fail "Env file should have no GOMEMLIMIT"
+fi
+
+log_test "defaults docker: --memory-limit sets the limit and GOMEMLIMIT"
+MOCK_DOCKER_PS="$DOCKER_PS"
+MOCK_INSPECT="$DOCKER_NO_LIMIT"
+MOCK_IMAGE_INSPECT="$DOCKER_IMAGE_INSPECT"
+run_upgrade --version 9.4.9 --yes --settle-seconds 0 --memory-limit 512Mi
+assert_exit_code 0
+assert_output_contains "Memory limit: 512Mi (was: not set)"
+assert_called "--memory 536870912"
+assert_not_called "--memory-swap"
+if [[ -f "$MOCK_ENV_COPY" ]] && grep -q '^GOMEMLIMIT=409MiB$' "$MOCK_ENV_COPY"; then
+  log_pass "Env file has GOMEMLIMIT=409MiB"
+else
+  log_fail "Env file should have GOMEMLIMIT=409MiB"
+fi
+
+log_test "defaults docker: --no-defaults changes the version only"
+MOCK_DOCKER_PS="$DOCKER_PS"
+MOCK_INSPECT="$DOCKER_NO_GOMEMLIMIT"
+MOCK_IMAGE_INSPECT="$DOCKER_IMAGE_INSPECT"
+run_upgrade --version 9.4.9 --yes --settle-seconds 0 --no-defaults
+assert_exit_code 0
+if [[ -f "$MOCK_ENV_COPY" ]] && ! grep -q '^GOMEMLIMIT=' "$MOCK_ENV_COPY"; then
+  log_pass "Env file has no GOMEMLIMIT"
+else
+  log_fail "Env file should have no GOMEMLIMIT"
+fi
+
+log_test "defaults docker: settings are added even when the version is already current"
+MOCK_DOCKER_PS="$DOCKER_PS"
+MOCK_INSPECT="$DOCKER_NO_GOMEMLIMIT"
+MOCK_IMAGE_INSPECT="$DOCKER_IMAGE_INSPECT"
+run_upgrade --version 9.2.0 --yes --settle-seconds 0
+assert_exit_code 0
+assert_output_contains "Image next: unchanged (already on 9.2.0)"
+assert_called "docker run --detach --name autoops-agent"
+assert_output_contains "Updated the settings of container autoops-agent"
+
+log_test "defaults docker: current version and nothing to add is a no-op"
+MOCK_DOCKER_PS="$DOCKER_PS"
+MOCK_INSPECT="$DOCKER_NO_LIMIT_OWN_GOMEMLIMIT"
+MOCK_IMAGE_INSPECT="$DOCKER_IMAGE_INSPECT"
+run_upgrade --version 9.2.0 --yes --settle-seconds 0
+assert_exit_code 0
+assert_output_contains "Nothing to do"
+assert_not_called "docker stop"
+assert_not_called "docker run"
+
+# ---------------------------
 # Several installs
 # ---------------------------
 
