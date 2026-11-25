@@ -5,3 +5,10 @@ steps:
       provider: "gcp"
       imagePrefix: "core-ubuntu-2204"
       machineType: "n2-standard-2" # small!
+
+  - label: ":bash: Test upgrade_autoops.sh"
+    command: "./upgrade/test_upgrade_autoops.sh"
+    agents:
+      provider: "gcp"
+      imagePrefix: "core-ubuntu-2204"
+      machineType: "n2-standard-2" # small!

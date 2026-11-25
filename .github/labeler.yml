@@ -11,7 +11,7 @@
 
 ':installer':
   - changed-files:
-      - any-glob-to-any-file: [k8s/**, linux/**]
+      - any-glob-to-any-file: [k8s/**, linux/**, upgrade/**]
 
 ':kubernetes':
   - changed-files:
@@ -23,4 +23,4 @@
 
 ':tests':
   - changed-files:
-    - any-glob-to-any-file: tools/test_*
+    - any-glob-to-any-file: [tools/test_*, upgrade/test_*]
