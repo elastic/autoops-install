@@ -23,6 +23,9 @@
 #
 # The script never prints secret values. Environment variables are shown by
 # name only.
+#
+# Besides the version, an upgrade brings in the recommended memory settings when
+# they are missing (see "Recommended defaults" below). --no-defaults turns that off.
 
 set -uo pipefail
 
@@ -40,6 +43,9 @@ ROLLBACK=false
 ASSUME_YES=false
 ALLOW_DOWNGRADE=false
 PULL=true
+APPLY_DEFAULTS=true    # bring in the recommended settings that are missing
+MEMORY_LIMIT=""        # set by --memory-limit, for example 512Mi
+GOMEMLIMIT_PERCENT=80  # GOMEMLIMIT as a share of the memory limit
 TIMEOUT_SECONDS=300    # k8s rollout timeout
 SETTLE_SECONDS=20      # how long a new container must stay up
 
@@ -78,6 +84,9 @@ General:
   --rollback              Go back to the version that ran before the last upgrade
   --yes                   Do not ask for confirmation
   --allow-downgrade       Allow --version to be older than the installed version
+  --no-defaults           Change the version only; do not add recommended settings
+  --memory-limit <size>   Set this memory limit on the agent, for example 512Mi or 1Gi.
+                          GOMEMLIMIT is then set to ${GOMEMLIMIT_PERCENT}% of it, unless you set one yourself.
   -h, --help              Show this help
 
 Kubernetes:
@@ -128,17 +137,47 @@ version_lt() {
   [[ "$1" != "$2" ]] && [[ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | head -n 1)" == "$1" ]]
 }
 
-# check_version_change <current tag>: exits when there is nothing to do or the
+# quantity_to_bytes <size>: prints a memory size such as 400Mi, 1Gi, 512M or
+# 1073741824 in bytes. Fails for forms it does not know (for example 1.5Gi).
+quantity_to_bytes() {
+  local number unit
+  if [[ ! "$1" =~ ^([0-9]+)(Ki|Mi|Gi|Ti|k|M|G|T)?$ ]]; then
+    return 1
+  fi
+  number="${BASH_REMATCH[1]}"
+  unit="${BASH_REMATCH[2]}"
+  case "$unit" in
+    "") echo "$number" ;;
+    Ki) echo $((number * 1024)) ;;
+    Mi) echo $((number * 1024 * 1024)) ;;
+    Gi) echo $((number * 1024 * 1024 * 1024)) ;;
+    Ti) echo $((number * 1024 * 1024 * 1024 * 1024)) ;;
+    k)  echo $((number * 1000)) ;;
+    M)  echo $((number * 1000 * 1000)) ;;
+    G)  echo $((number * 1000 * 1000 * 1000)) ;;
+    T)  echo $((number * 1000 * 1000 * 1000 * 1000)) ;;
+  esac
+}
+
+# gomemlimit_for <bytes>: prints the GOMEMLIMIT value for a memory limit.
+gomemlimit_for() {
+  echo "$(($1 * GOMEMLIMIT_PERCENT / 100 / 1024 / 1024))MiB"
+}
+
+SAME_VERSION=false
+
+# check_version_change <current tag>: sets SAME_VERSION, and exits when the
 # change is a downgrade that was not asked for.
 check_version_change() {
   local current="$1"
+  SAME_VERSION=false
   if [[ -z "$current" ]]; then
     warn "The installed image has no version tag, so the installed version is unknown."
     return 0
   fi
   if [[ "$current" == "$VERSION" ]]; then
-    log "The agent is already on version ${VERSION}. Nothing to do."
-    exit "$EXIT_OK"
+    SAME_VERSION=true
+    return 0
   fi
   if version_lt "$VERSION" "$current" && [[ "$ALLOW_DOWNGRADE" == false ]]; then
     err "Version ${VERSION} is older than the installed version ${current}. Use --allow-downgrade to do this anyway."
@@ -181,6 +220,8 @@ while [[ "$#" -gt 0 ]]; do
     --timeout) need_value "$@"; TIMEOUT_SECONDS="$2"; shift 2;;
     --container) need_value "$@"; CONTAINER="$2"; shift 2;;
     --no-pull) PULL=false; shift;;
+    --no-defaults) APPLY_DEFAULTS=false; shift;;
+    --memory-limit) need_value "$@"; MEMORY_LIMIT="$2"; shift 2;;
     --settle-seconds) need_value "$@"; SETTLE_SECONDS="$2"; shift 2;;
     -h|--help) usage; exit "$EXIT_OK";;
     *) err "Unknown parameter: $1"; usage >&2; exit "$EXIT_USAGE";;
@@ -205,18 +246,111 @@ if [[ ! "$TIMEOUT_SECONDS" =~ ^[0-9]+$ || ! "$SETTLE_SECONDS" =~ ^[0-9]+$ ]]; th
   exit "$EXIT_USAGE"
 fi
 
+if [[ -n "$MEMORY_LIMIT" && ! "$MEMORY_LIMIT" =~ ^[1-9][0-9]*(Mi|Gi)$ ]]; then
+  err "--memory-limit must look like 512Mi or 1Gi (got '${MEMORY_LIMIT}')"
+  exit "$EXIT_USAGE"
+fi
+
+if [[ -n "$MEMORY_LIMIT" && "$APPLY_DEFAULTS" == false ]]; then
+  err "--memory-limit cannot be combined with --no-defaults"
+  exit "$EXIT_USAGE"
+fi
+
+if [[ -n "$MEMORY_LIMIT" && "$ROLLBACK" == true ]]; then
+  err "--memory-limit cannot be combined with --rollback"
+  exit "$EXIT_USAGE"
+fi
+
 if [[ -n "$K8S_NAMESPACE" && "$K8S_ALL_NAMESPACES" == true ]]; then
   err "--namespace cannot be combined with --all-namespaces"
   exit "$EXIT_USAGE"
 fi
 
 # ---------------------------
+# Recommended defaults
+# ---------------------------
+# What an upgrade adds when it is missing:
+#
+#   GOMEMLIMIT   80% of the agent's memory limit, so the Go runtime collects
+#                garbage before the limit is reached. Never changed when you
+#                set one yourself.
+#
+# What it does not add on its own:
+#
+#   Memory limit   The right size depends on the monitored cluster, so the script
+#                  only sets one when you pass --memory-limit.
+#   Scrape periods, send queue
+#                  These are part of the configuration inside the agent image
+#                  (otel_samples/autoops_es.yml), so the new version brings its
+#                  own. A configuration you mounted yourself is left as it is.
+
+DEFAULTS_NEW_LIMIT=""       # memory limit to set (from --memory-limit), or empty
+DEFAULTS_NEW_GOMEMLIMIT=""  # GOMEMLIMIT to add, or empty
+DEFAULTS_NOTES=()           # lines for the plan
+
+# plan_defaults <current limit in bytes, or empty> <current limit as shown> <has GOMEMLIMIT: true|false>
+plan_defaults() {
+  local current_bytes="$1" current_shown="$2" has_gomemlimit="$3" effective_bytes wanted_bytes
+  DEFAULTS_NEW_LIMIT=""
+  DEFAULTS_NEW_GOMEMLIMIT=""
+  DEFAULTS_NOTES=()
+
+  if [[ "$APPLY_DEFAULTS" == false ]]; then
+    return 0
+  fi
+
+  effective_bytes="$current_bytes"
+  if [[ -n "$MEMORY_LIMIT" ]]; then
+    wanted_bytes="$(quantity_to_bytes "$MEMORY_LIMIT")"
+    if [[ "$wanted_bytes" != "$current_bytes" ]]; then
+      DEFAULTS_NEW_LIMIT="$MEMORY_LIMIT"
+      effective_bytes="$wanted_bytes"
+      DEFAULTS_NOTES+=("Memory limit: ${MEMORY_LIMIT} (was: ${current_shown:-not set})")
+    fi
+  fi
+
+  if [[ "$has_gomemlimit" == true ]]; then
+    if [[ -n "$DEFAULTS_NEW_LIMIT" ]]; then
+      DEFAULTS_NOTES+=("GOMEMLIMIT: kept as you set it. Check that it is still below the new memory limit.")
+    fi
+  elif [[ -n "$effective_bytes" ]]; then
+    DEFAULTS_NEW_GOMEMLIMIT="$(gomemlimit_for "$effective_bytes")"
+    DEFAULTS_NOTES+=("GOMEMLIMIT: ${DEFAULTS_NEW_GOMEMLIMIT} (${GOMEMLIMIT_PERCENT}% of the memory limit; it was not set)")
+  else
+    DEFAULTS_NOTES+=("GOMEMLIMIT: not added, because the agent has no memory limit to derive it from.")
+    DEFAULTS_NOTES+=("  To set both, re-run with --memory-limit <size>, for example --memory-limit 512Mi.")
+  fi
+}
+
+defaults_pending() {
+  [[ -n "$DEFAULTS_NEW_LIMIT" || -n "$DEFAULTS_NEW_GOMEMLIMIT" ]]
+}
+
+print_defaults() {
+  local note
+  if [[ "$APPLY_DEFAULTS" == false ]]; then
+    log "  Recommended settings: skipped (--no-defaults)."
+    return 0
+  fi
+  if [[ ${#DEFAULTS_NOTES[@]} -eq 0 ]]; then
+    log "  Recommended settings: nothing to add."
+    return 0
+  fi
+  log "  Recommended settings:"
+  for note in "${DEFAULTS_NOTES[@]}"; do
+    log "    ${note}"
+  done
+}
+
+# ---------------------------
 # Kubernetes
 # ---------------------------
 KUBECTL=(kubectl)
 
-# One line per Deployment: namespace|name|managed-by|ECK type|name=image;name=image;
-K8S_LIST_TEMPLATE='{range .items[*]}{.metadata.namespace}{"|"}{.metadata.name}{"|"}{.metadata.labels.app\.kubernetes\.io/managed-by}{"|"}{.metadata.labels.common\.k8s\.elastic\.co/type}{"|"}{range .spec.template.spec.containers[*]}{.name}{"="}{.image}{";"}{end}{"\n"}{end}'
+# One line per Deployment:
+#   namespace|name|managed-by|ECK type|container;container;
+# where each container is: name=image=memory limit=env name,env name,
+K8S_LIST_TEMPLATE='{range .items[*]}{.metadata.namespace}{"|"}{.metadata.name}{"|"}{.metadata.labels.app\.kubernetes\.io/managed-by}{"|"}{.metadata.labels.common\.k8s\.elastic\.co/type}{"|"}{range .spec.template.spec.containers[*]}{.name}{"="}{.image}{"="}{.resources.limits.memory}{"="}{range .env[*]}{.name}{","}{end}{";"}{end}{"\n"}{end}'
 
 K8S_FOUND=()    # candidate lines, same format as the template
 
@@ -254,33 +388,43 @@ k8s_find() {
   return 0
 }
 
-# k8s_pick_container <containers field>: sets K8S_PICKED_NAME and K8S_PICKED_IMAGE.
+# k8s_pick_container <containers field>: sets K8S_PICKED_NAME, K8S_PICKED_IMAGE,
+# K8S_PICKED_LIMIT (memory limit, may be empty) and K8S_PICKED_ENVS (",NAME,NAME,").
 k8s_pick_container() {
-  local containers="$1" entry name image count=0 first_name="" first_image=""
+  local containers="$1" entry name rest image limit envs count=0 first=""
   K8S_PICKED_NAME=""
   K8S_PICKED_IMAGE=""
+  K8S_PICKED_LIMIT=""
+  K8S_PICKED_ENVS=""
 
   while IFS= read -r -d ';' entry; do
     [[ -z "$entry" ]] && continue
+    # name=image=limit=envs ; the last two may be missing
     name="${entry%%=*}"
-    image="${entry#*=}"
-    count=$((count + 1))
-    if [[ $count -eq 1 ]]; then
-      first_name="$name"
-      first_image="$image"
+    rest="${entry#*=}"
+    image="${rest%%=*}"
+    limit=""
+    envs=""
+    if [[ "$rest" == *=* ]]; then
+      rest="${rest#*=}"
+      limit="${rest%%=*}"
+      [[ "$rest" == *=* ]] && envs="${rest#*=}"
     fi
+    count=$((count + 1))
+    [[ $count -eq 1 ]] && first="${name}|${image}|${limit}|${envs}"
     if [[ -n "$K8S_CONTAINER" ]]; then
       if [[ "$name" == "$K8S_CONTAINER" ]]; then
-        K8S_PICKED_NAME="$name"; K8S_PICKED_IMAGE="$image"
+        K8S_PICKED_NAME="$name"; K8S_PICKED_IMAGE="$image"; K8S_PICKED_LIMIT="$limit"; K8S_PICKED_ENVS=",${envs}"
         return 0
       fi
     elif [[ -z "$K8S_PICKED_NAME" && ( "$image" == *elastic-otel-collector* || "$image" == *elastic-agent* ) ]]; then
-      K8S_PICKED_NAME="$name"; K8S_PICKED_IMAGE="$image"
+      K8S_PICKED_NAME="$name"; K8S_PICKED_IMAGE="$image"; K8S_PICKED_LIMIT="$limit"; K8S_PICKED_ENVS=",${envs}"
     fi
   done <<<"$containers"
 
   if [[ -z "$K8S_PICKED_NAME" && -z "$K8S_CONTAINER" && $count -eq 1 ]]; then
-    K8S_PICKED_NAME="$first_name"; K8S_PICKED_IMAGE="$first_image"
+    IFS='|' read -r K8S_PICKED_NAME K8S_PICKED_IMAGE K8S_PICKED_LIMIT envs <<<"$first"
+    K8S_PICKED_ENVS=",${envs}"
   fi
   [[ -n "$K8S_PICKED_NAME" ]]
 }
@@ -339,13 +483,31 @@ k8s_run() {
   check_version_change "$IMG_TAG"
   new_image="${IMG_REPO}:${VERSION}"
 
+  local limit_bytes="" has_gomemlimit=false patch
+  if [[ -n "$K8S_PICKED_LIMIT" ]] && ! limit_bytes="$(quantity_to_bytes "$K8S_PICKED_LIMIT")"; then
+    warn "The memory limit '${K8S_PICKED_LIMIT}' is in a form this script does not read, so GOMEMLIMIT is not derived from it."
+    limit_bytes=""
+  fi
+  [[ "$K8S_PICKED_ENVS" == *",GOMEMLIMIT,"* ]] && has_gomemlimit=true
+  plan_defaults "$limit_bytes" "$K8S_PICKED_LIMIT" "$has_gomemlimit"
+
+  if [[ "$SAME_VERSION" == true ]] && ! defaults_pending; then
+    log "The agent is already on version ${VERSION}. Nothing to do."
+    exit "$EXIT_OK"
+  fi
+
   log ""
   log "Plan:"
   log "  Container:  ${K8S_PICKED_NAME}"
   log "  Image now:  ${K8S_PICKED_IMAGE}"
-  log "  Image next: ${new_image}"
-  log "  Kept as is: the Secret, environment variables, resources, volumes and every other setting."
-  log "  Only the image of this one container changes; the manifest is not re-applied."
+  if [[ "$SAME_VERSION" == true ]]; then
+    log "  Image next: unchanged (already on ${VERSION})"
+  else
+    log "  Image next: ${new_image}"
+  fi
+  print_defaults
+  log "  Kept as is: the Secret, the other environment variables, volumes and every other setting."
+  log "  Only this one container is changed; the manifest is not re-applied."
   log "  If the new version does not become ready within ${TIMEOUT_SECONDS}s, the previous one is restored."
 
   if [[ "$DRY_RUN" == true ]]; then
@@ -356,7 +518,22 @@ k8s_run() {
 
   confirm "Upgrade Deployment ${name} in namespace ${ns} to ${VERSION}?"
 
-  if ! "${KUBECTL[@]}" --namespace "$ns" set image "deployment/${name}" "${K8S_PICKED_NAME}=${new_image}"; then
+  if defaults_pending; then
+    # One patch for the image and the settings, so there is one rollout and one
+    # revision to undo. Containers and env entries are merged by name.
+    patch="{\"name\":\"${K8S_PICKED_NAME}\",\"image\":\"${new_image}\""
+    if [[ -n "$DEFAULTS_NEW_GOMEMLIMIT" ]]; then
+      patch+=",\"env\":[{\"name\":\"GOMEMLIMIT\",\"value\":\"${DEFAULTS_NEW_GOMEMLIMIT}\"}]"
+    fi
+    if [[ -n "$DEFAULTS_NEW_LIMIT" ]]; then
+      patch+=",\"resources\":{\"limits\":{\"memory\":\"${DEFAULTS_NEW_LIMIT}\"},\"requests\":{\"memory\":\"${DEFAULTS_NEW_LIMIT}\"}}"
+    fi
+    patch="{\"spec\":{\"template\":{\"spec\":{\"containers\":[${patch}}]}}}}"
+    if ! "${KUBECTL[@]}" --namespace "$ns" patch "deployment/${name}" --type strategic --patch "$patch"; then
+      err "The Deployment could not be changed. Nothing was upgraded."
+      exit "$EXIT_FAILED"
+    fi
+  elif ! "${KUBECTL[@]}" --namespace "$ns" set image "deployment/${name}" "${K8S_PICKED_NAME}=${new_image}"; then
     err "The image could not be changed. Nothing was upgraded."
     exit "$EXIT_FAILED"
   fi
@@ -373,7 +550,11 @@ k8s_run() {
   fi
 
   log ""
-  log "Upgraded Deployment ${name} to ${VERSION}."
+  if [[ "$SAME_VERSION" == true ]]; then
+    log "Updated the settings of Deployment ${name} (version ${VERSION})."
+  else
+    log "Upgraded Deployment ${name} to ${VERSION}."
+  fi
   log "Logs:     kubectl --namespace ${ns} logs deployment/${name} --container ${K8S_PICKED_NAME} --tail 50"
   log "Rollback: $0 --target k8s --namespace ${ns} --deployment ${name} --rollback"
   exit "$EXIT_OK"
@@ -462,7 +643,7 @@ print_command() {
   local arg out=""
   for arg in "$@"; do
     if [[ "$arg" == "$ENV_FILE" && -n "$ENV_FILE" ]]; then
-      out+=" <file with the ${ENV_COUNT} kept environment variables>"
+      out+=" <file with ${ENV_COUNT} environment variables>"
     else
       out+=" $(printf '%q' "$arg")"
     fi
@@ -513,7 +694,7 @@ runtime_rollback() {
 runtime_run() {
   local name="$1" info image_info old_image new_image backup was_running value
   local run_args=() cmd_args=() host_ip host_port container_port
-  local type source target readonly mount
+  local type source target readonly mount memory_bytes has_gomemlimit=false
 
   RUNTIME="$2"
   name="${name#/}"
@@ -567,6 +748,21 @@ runtime_run() {
     ENV_COUNT=$((ENV_COUNT + 1))
   done <<<"$(field "$info" env)"
 
+  # --- Recommended settings ---
+  memory_bytes="$(first_field "$info" memory)"
+  [[ "$memory_bytes" =~ ^[0-9]+$ && "$memory_bytes" -gt 0 ]] || memory_bytes=""
+  grep -q '^GOMEMLIMIT=' <<<"$(field "$info" env)" && has_gomemlimit=true
+  plan_defaults "$memory_bytes" "${memory_bytes:+$((memory_bytes / 1024 / 1024))Mi}" "$has_gomemlimit"
+  if [[ -n "$DEFAULTS_NEW_GOMEMLIMIT" ]]; then
+    printf 'GOMEMLIMIT=%s\n' "$DEFAULTS_NEW_GOMEMLIMIT" >>"$ENV_FILE"
+    ENV_COUNT=$((ENV_COUNT + 1))
+  fi
+
+  if [[ "$SAME_VERSION" == true ]] && ! defaults_pending; then
+    log "The agent is already on version ${VERSION}. Nothing to do."
+    exit "$EXIT_OK"
+  fi
+
   run_args=(run --detach --name "$name" --env-file "$ENV_FILE")
 
   # --- Restart policy ---
@@ -579,9 +775,12 @@ runtime_run() {
   fi
 
   # --- Memory and CPU ---
-  value="$(first_field "$info" memory)"
-  if [[ "$value" =~ ^[0-9]+$ && "$value" -gt 0 ]]; then
-    run_args+=(--memory "$value")
+  if [[ -n "$DEFAULTS_NEW_LIMIT" ]]; then
+    # A new limit replaces the old one. The old swap setting was sized for the
+    # old limit, so it is left to the runtime's default.
+    run_args+=(--memory "$(quantity_to_bytes "$DEFAULTS_NEW_LIMIT")")
+  elif [[ -n "$memory_bytes" ]]; then
+    run_args+=(--memory "$memory_bytes")
     value="$(first_field "$info" memswap)"
     if [[ "$value" =~ ^-?[0-9]+$ && "$value" -ne 0 ]]; then
       run_args+=(--memory-swap "$value")
@@ -641,8 +840,13 @@ runtime_run() {
   log ""
   log "Plan:"
   log "  Image now:  ${old_image}"
-  log "  Image next: ${new_image}"
-  log "  Kept environment variables (${ENV_COUNT}, values not shown): ${env_names:-none}"
+  if [[ "$SAME_VERSION" == true ]]; then
+    log "  Image next: unchanged (already on ${VERSION})"
+  else
+    log "  Image next: ${new_image}"
+  fi
+  print_defaults
+  log "  Kept environment variables (values not shown): ${env_names:-none}"
   log "  The current container is stopped and kept as ${backup}, so it can be restored."
   if container_exists "$backup"; then
     log "  An older backup container named ${backup} exists and will be removed first."
@@ -685,7 +889,11 @@ runtime_run() {
 
   if "$RUNTIME" "${run_args[@]}" >/dev/null && container_healthy "$name"; then
     log ""
-    log "Upgraded container ${name} to ${VERSION}."
+    if [[ "$SAME_VERSION" == true ]]; then
+      log "Updated the settings of container ${name} (version ${VERSION})."
+    else
+      log "Upgraded container ${name} to ${VERSION}."
+    fi
     log "Logs:          ${RUNTIME} logs --tail 50 ${name}"
     log "Rollback:      $0 --target ${RUNTIME} --container ${name} --rollback"
     log "Remove backup: ${RUNTIME} rm ${backup}"
